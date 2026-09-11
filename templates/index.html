@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>PIC32MK CAN Firmware Uploader</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">↯</span><div><p>OFFLINE SERVICE TOOL</p><h1>PIC32MK Firmware Uploader</h1></div></div>
+      <div class="top-actions"><span id="connection-pill" class="connection-pill offline"><i></i>Disconnected</span><button id="theme-toggle" class="icon-button" title="Toggle colour mode" aria-label="Toggle colour mode">☼</button></div>
+    </header>
+
+    <section class="card connection-card">
+      <div class="section-heading"><span class="section-number">01</span><div><h2>USB-CAN connection</h2><p>Connect the Waveshare USB-CAN-A adapter to the controller CAN bus.</p></div></div>
+      <div class="connection-controls">
+        <label>COM port<select id="port" aria-label="COM port"><option>Refresh to find ports</option></select></label>
+        <button id="refresh" class="button secondary">Refresh</button>
+        <label>CAN bitrate<select id="bitrate" aria-label="CAN bitrate"><option value="1000000">1 Mbit/s</option><option value="500000" selected>500 kbit/s</option><option value="250000">250 kbit/s</option><option value="125000">125 kbit/s</option></select></label>
+        <button id="connect" class="button primary">Connect</button>
+        <button id="disconnect" class="button danger">Disconnect</button>
+      </div>
+    </section>
+
+    <section class="card progress-card">
+      <div class="progress-copy"><div><span id="phase" class="phase">Idle</span><p id="status-message">Connect a USB-CAN adapter to begin.</p></div><strong id="progress-label">0%</strong></div>
+      <div class="progress-track" role="progressbar" aria-label="Firmware upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar"></div></div>
+    </section>
+
+    <section class="grid">
+      <section class="card firmware-card">
+        <div class="section-heading"><span class="section-number">02</span><div><h2>Firmware image</h2><p>Select a compiled application binary from this computer.</p></div></div>
+        <label id="drop-zone" class="drop-zone"><input id="firmware-file" type="file" accept=".bin,application/octet-stream"><span class="upload-glyph">↑</span><strong>Choose a <code>.bin</code> file</strong><small>File remains local to this offline service tool.</small></label>
+        <div id="file-info" class="file-info"><span>No firmware image selected</span></div>
+        <div class="firmware-actions"><button id="read-info" class="button secondary">Read controller info</button><button id="force-update" class="button danger" title="Keep the bootloader active after a controller reset">Force update</button><button id="start-update" class="button primary">Firmware update <span aria-hidden="true">→</span></button></div>
+      </section>
+
+      <section class="card controller-card">
+        <div class="section-heading"><span class="section-number">03</span><div><h2>Controller information</h2><p>Live values read through the bootloader protocol.</p></div></div>
+        <dl class="controller-info">
+          <div><dt>MAC ID</dt><dd id="mac_id">—</dd></div>
+          <div><dt>Device ID</dt><dd id="device_id">—</dd></div>
+          <div><dt>Device name</dt><dd id="device_name">—</dd></div>
+          <div><dt>Project ID</dt><dd id="project_id">—</dd></div>
+          <div><dt>Firmware ID</dt><dd id="firmware_id">—</dd></div>
+          <div><dt>Boot version</dt><dd id="boot_version">—</dd></div>
+          <div><dt>Mode</dt><dd id="status">—</dd></div>
+          <div><dt>Application size</dt><dd id="app_size">—</dd></div>
+          <div><dt>Application CRC</dt><dd id="crc">—</dd></div>
+        </dl>
+        <div class="identifier-editor">
+          <p>IDs are written only after firmware CRC validation.</p>
+          <div><label>Updated project ID<input id="project-id-input" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" placeholder="e.g. 1.0"></label><label>Updated firmware ID<input id="firmware-id-input" type="number" inputmode="decimal" min="0" step="0.1" autocomplete="off" placeholder="e.g. 2.0"></label></div>
+          <button id="update-ids" class="button secondary">Update IDs</button><span id="identifier-note">Read controller info or enter IDs to queue them.</span>
+        </div>
+      </section>
+    </section>
+
+    <section class="card log-card">
+      <div class="log-head"><div class="section-heading"><span class="section-number">04</span><div><h2>Bootloader CAN activity</h2><p>Only CAN IDs <code>0x0B0</code> and <code>0x0B1</code> are shown.</p></div></div><button id="clear-log" class="button text">Clear log</button></div>
+      <div id="log-output" class="log-output" aria-live="polite"><span class="muted">Waiting for bootloader activity…</span></div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20260910-id-input-fix"></script>
+</body>
+</html>
