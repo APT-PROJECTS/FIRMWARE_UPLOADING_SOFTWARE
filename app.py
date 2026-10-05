@@ -32,11 +32,15 @@ SUB_MAC_WORDS = (0x01, 0x02, 0x03, 0x04)
 SUB_DEVICE_ID, SUB_PROJECT_ID, SUB_FIRMWARE_ID, SUB_BOOT_VERSION = 0x05, 0x01, 0x02, 0x03
 SUB_BOOT_JUMP, SUB_APP_JUMP = 0x01, 0x02
 STATUS_NAMES = {0x01: "Bootloader", 0x02: "Application", 0x03: "Unknown"}
-DEVICE_NAMES = {
-    0x08B02053: "PIC32MK1024MCM064",
-    0x08B05053: "PIC32MK0512MCM064",
-    0x00009DA3: "PIC32AK1216GC41064",
+DEVICE_UPLOAD_PROFILES = {
+    # The firmware data transfer is shared: 1 KiB chunks composed of 256 four-byte CAN frames.
+    # PIC32MK enters its application before sending a final APP_JUMP acknowledgement.
+    0x08B02053: {"name": "PIC32MK1024MCM064", "family": "PIC32MK", "app_jump_ack": False},
+    0x08B05053: {"name": "PIC32MK0512MCM064", "family": "PIC32MK", "app_jump_ack": False},
+    # The PIC32AK loader acknowledges APP_JUMP immediately before it enters the application.
+    0x00009DA3: {"name": "PIC32AK1216GC41064", "family": "PIC32AK", "app_jump_ack": True},
 }
+DEVICE_NAMES = {device_id: profile["name"] for device_id, profile in DEVICE_UPLOAD_PROFILES.items()}
 CHUNK_SIZE, FRAME_PAYLOAD_SIZE, MAX_REQUEST_ATTEMPTS = 1024, 4, 5
 FORCE_PROBE_ATTEMPTS = 1000
 EXPECTED_STAY_IN_BOOT_REPLY = bytes([CMD_STAY_IN_BOOT, 0, 0, CAN_SUCCESS, 0, 0, 0, 0])
@@ -65,6 +69,7 @@ class UploadService:
         self.controller = blank_controller()
         self.firmware: dict | None = None
         self.pending_ids: dict[str, float] | None = None
+        self.device_id: int | None = None
 
     def log(self, message: str, level: str = "info") -> None:
         self.log_sequence += 1
@@ -133,6 +138,13 @@ class UploadService:
             raise RuntimeError(f"Controller rejected: {label}")
         return reply
 
+    def _device_profile(self) -> dict:
+        profile = DEVICE_UPLOAD_PROFILES.get(self.device_id)
+        if profile is None:
+            value = "unknown" if self.device_id is None else f"0x{self.device_id:08X}"
+            raise RuntimeError(f"Unsupported controller device ID: {value}")
+        return profile
+
     def _read_controller_info(self) -> None:
         self.status.update(phase="Reading controller information", message="Reading device data over CAN")
         values: list[int] = []
@@ -143,6 +155,7 @@ class UploadService:
 
         response = self._success(self._request(self._frame(CMD_PIC_ID, SUB_DEVICE_ID, CAN_READ), "Read device ID", self._reply(CMD_PIC_ID, CAN_READ, SUB_DEVICE_ID)), "device ID")
         device_id = int.from_bytes(response[4:8], "big")
+        self.device_id = device_id
         self.controller["device_id"] = f"0x{device_id:08X}"
         self.controller["device_name"] = DEVICE_NAMES.get(device_id, "Unknown PIC32 device")
 
@@ -210,6 +223,8 @@ class UploadService:
         response
 
     def _send_firmware(self, image: bytes) -> None:
+        profile = self._device_profile()
+        self.log(f"{profile['family']} write profile: 1 KiB chunks, 256 four-byte CAN frames per chunk")
         chunks = (len(image) + CHUNK_SIZE - 1) // CHUNK_SIZE
         for number in range(chunks):
             chunk_index = (number % 255) + 1
@@ -285,8 +300,17 @@ class UploadService:
         self.pending_ids = None
 
     def _app_jump(self) -> None:
-        # The current bootloader calls the application's reset vector immediately
-        # and therefore cannot place an ACK on CAN for this final hand-off.
+        profile = self._device_profile()
+        if profile["app_jump_ack"]:
+            # PIC32AK confirms APP_JUMP before it enters the application.
+            self._success(
+                self._request(self._frame(CMD_JUMP, SUB_APP_JUMP), "Jump to application", self._reply(CMD_JUMP, 0, SUB_APP_JUMP), 4.0),
+                "application jump",
+            )
+            self.log("PIC32AK application-jump acknowledgement received", "success")
+            return
+
+        # PIC32MK enters the application before it can place a final ACK on CAN.
         self._send(self._frame(CMD_JUMP, SUB_APP_JUMP), "Jump to application")
         self.log("Application jump requested; controller restarts before a final CAN acknowledgement", "success")
 
@@ -297,6 +321,8 @@ class UploadService:
         if not image:
             raise RuntimeError("The selected firmware file is empty")
         self._read_controller_info()
+        profile = self._device_profile()
+        self.log(f"Detected {profile['name']}; using {profile['family']} firmware-write profile", "success")
         self.status.update(phase="Entering bootloader", message="Requesting bootloader mode")
         self._boot_jump()
         self.status.update(phase="Validating image size", message="Checking application partition")

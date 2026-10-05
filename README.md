@@ -1,6 +1,6 @@
-# PIC32MK CAN Firmware Uploader
+# PIC32MK / PIC32AK CAN Firmware Uploader
 
-Offline Flask service tool for programming a PIC32MK1024MCM064 application through a Waveshare USB-CAN-A adapter. It uses only local serial/CAN communication; it does not download firmware, check for versions, or send reports.
+Offline Flask service tool for programming supported PIC32MK and PIC32AK applications through a Waveshare USB-CAN-A adapter. It uses only local serial/CAN communication; it does not download firmware, check for versions, or send reports.
 
 ## Run
 
