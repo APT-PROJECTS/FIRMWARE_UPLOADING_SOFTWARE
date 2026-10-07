@@ -34,7 +34,7 @@
       <section class="card firmware-card">
         <div class="section-heading"><span class="section-number">02</span><div><h2>Firmware image</h2><p>Select a compiled application binary from this computer.</p></div></div>
         <label id="drop-zone" class="drop-zone"><input id="firmware-file" type="file" accept=".bin,application/octet-stream"><span class="upload-glyph">↑</span><strong>Choose a <code>.bin</code> file</strong><small>File remains local to this offline service tool.</small></label>
-        <div id="file-info" class="file-info"><span>No firmware image selected</span></div>
+        <div class="file-info-row"><div id="file-info" class="file-info"><span>No firmware image selected</span></div><button id="clear-firmware" class="clear-firmware" type="button" title="Remove selected firmware" aria-label="Remove selected firmware" hidden>&times;</button></div>
         <div class="firmware-actions"><button id="read-info" class="button secondary">Read controller info</button><button id="force-update" class="button danger" title="Keep the bootloader active after a controller reset">Force update</button><button id="start-update" class="button primary">Firmware update <span aria-hidden="true">→</span></button></div>
       </section>
 

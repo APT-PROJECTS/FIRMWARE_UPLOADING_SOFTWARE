@@ -393,6 +393,23 @@ class UploadService:
         self.log(f"Software IDs queued for post-CRC update: project {values['project_id']:.1f}, firmware {values['firmware_id']:.1f}", "success")
         return values
 
+    def clear_firmware(self) -> None:
+        if self.status["busy"]:
+            raise RuntimeError("Wait for the active controller operation to finish")
+
+        firmware = self.firmware
+        self.firmware = None
+        if not firmware:
+            return
+
+        path = firmware["path"]
+        try:
+            path.resolve().relative_to(UPLOAD_DIR.resolve())
+            path.unlink(missing_ok=True)
+        except (OSError, ValueError) as error:
+            self.log(f"Firmware selection cleared; local copy could not be removed: {error}", "warning")
+        self.log(f"Firmware selection cleared: {firmware['name']}")
+
     def clear_logs(self) -> None:
         self.logs.clear()
         self.log_generation += 1
@@ -444,6 +461,12 @@ def upload_file():
     service.firmware = {"name": filename, "path": path, "size": size, "crc": zlib.crc32(content) & 0xFFFFFFFF}
     service.log(f"Firmware loaded: {filename} ({size:,} bytes)", "success")
     return jsonify({"ok": True, "name": filename, "size": size, "crc": f"0x{service.firmware['crc']:08X}"})
+
+
+@app.post("/api/firmware/clear")
+def clear_firmware():
+    service.clear_firmware()
+    return jsonify({"ok": True})
 
 
 @app.post("/api/controller/read")

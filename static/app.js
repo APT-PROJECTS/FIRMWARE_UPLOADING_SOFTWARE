@@ -102,8 +102,13 @@ function renderStatus(data) {
   controllerFields.forEach((field) => { $(field).textContent = controller[field] || '—'; });
   renderIdentifierEditor(controller, pending_ids);
   const dropZone = $('drop-zone');
+  const clearFirmware = $('clear-firmware');
   dropZone.classList.toggle('firmware-loaded', Boolean(firmware));
-  if (firmware) $('file-info').textContent = `${firmware.name} · ${Number(firmware.size).toLocaleString()} bytes · ${firmware.crc}`;
+  clearFirmware.hidden = !firmware;
+  clearFirmware.disabled = !firmware || status.busy;
+  $('file-info').textContent = firmware
+    ? `${firmware.name} · ${Number(firmware.size).toLocaleString()} bytes · ${firmware.crc}`
+    : 'No firmware image selected';
   setButtonState(status);
   renderLogs(logs, log_generation);
 }
@@ -138,6 +143,11 @@ $('refresh').addEventListener('click', guarded(refreshPorts));
 $('connect').addEventListener('click', guarded(connect));
 $('disconnect').addEventListener('click', guarded(async () => { await api('/api/disconnect', { method: 'POST' }); await pollStatus(); }));
 $('firmware-file').addEventListener('change', guarded(uploadFirmware));
+$('clear-firmware').addEventListener('click', guarded(async () => {
+  await api('/api/firmware/clear', { method: 'POST' });
+  $('firmware-file').value = '';
+  await pollStatus();
+}));
 
 const dropZone = $('drop-zone');
 ['dragenter', 'dragover'].forEach((eventName) => {
