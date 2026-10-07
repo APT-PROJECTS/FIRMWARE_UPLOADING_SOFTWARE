@@ -142,7 +142,7 @@ $('theme-toggle').addEventListener('click', () => {
 $('refresh').addEventListener('click', guarded(refreshPorts));
 $('connect').addEventListener('click', guarded(connect));
 $('disconnect').addEventListener('click', guarded(async () => { await api('/api/disconnect', { method: 'POST' }); await pollStatus(); }));
-$('firmware-file').addEventListener('change', guarded(uploadFirmware));
+$('firmware-file').addEventListener('change', guarded(() => uploadFirmware()));
 $('clear-firmware').addEventListener('click', guarded(async () => {
   await api('/api/firmware/clear', { method: 'POST' });
   $('firmware-file').value = '';
