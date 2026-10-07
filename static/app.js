@@ -101,6 +101,8 @@ function renderStatus(data) {
   pill.lastChild.textContent = status.connected ? 'Connected' : 'Disconnected';
   controllerFields.forEach((field) => { $(field).textContent = controller[field] || '—'; });
   renderIdentifierEditor(controller, pending_ids);
+  const dropZone = $('drop-zone');
+  dropZone.classList.toggle('firmware-loaded', Boolean(firmware));
   if (firmware) $('file-info').textContent = `${firmware.name} · ${Number(firmware.size).toLocaleString()} bytes · ${firmware.crc}`;
   setButtonState(status);
   renderLogs(logs, log_generation);
