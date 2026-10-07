@@ -119,15 +119,15 @@ async function connect() {
   await pollStatus();
 }
 
-async function uploadFirmware() {
-  const file = $('firmware-file').files[0];
-  if (!file) throw new Error('Choose a .bin firmware file first.');
+async function uploadFirmware(file = $('firmware-file').files[0]) {
+  if (!file) throw new Error('Choose or drop a .bin firmware file first.');
+  if (!file.name.toLowerCase().endsWith('.bin')) throw new Error('Only .bin firmware files are supported.');
   const body = new FormData(); body.append('firmware', file);
   await api('/api/firmware', { method: 'POST', body });
   await pollStatus();
 }
 
-function guarded(task) { return async () => { try { await task(); } catch (error) { showError(error); } }; }
+function guarded(task) { return async (...args) => { try { await task(...args); } catch (error) { showError(error); } }; }
 
 loadTheme();
 $('theme-toggle').addEventListener('click', () => {
@@ -138,6 +138,26 @@ $('refresh').addEventListener('click', guarded(refreshPorts));
 $('connect').addEventListener('click', guarded(connect));
 $('disconnect').addEventListener('click', guarded(async () => { await api('/api/disconnect', { method: 'POST' }); await pollStatus(); }));
 $('firmware-file').addEventListener('change', guarded(uploadFirmware));
+
+const dropZone = $('drop-zone');
+['dragenter', 'dragover'].forEach((eventName) => {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropZone.classList.add('drag-over');
+  });
+});
+['dragleave', 'drop'].forEach((eventName) => {
+  dropZone.addEventListener(eventName, (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    dropZone.classList.remove('drag-over');
+  });
+});
+dropZone.addEventListener('drop', guarded(async (event) => {
+  const [file] = event.dataTransfer.files;
+  await uploadFirmware(file);
+}));
 $('read-info').addEventListener('click', guarded(async () => { await api('/api/controller/read', { method: 'POST' }); await pollStatus(); }));
 $('start-update').addEventListener('click', guarded(async () => { await api('/api/update', { method: 'POST' }); await pollStatus(); }));
 $('force-update').addEventListener('click', guarded(async () => {
