@@ -4,7 +4,6 @@ import struct
 import threading
 import time
 import zlib
-import math
 from collections import deque
 from pathlib import Path
 from typing import Callable
@@ -68,7 +67,6 @@ class UploadService:
         self.status = {"connected": False, "busy": False, "phase": "Idle", "progress": 0, "message": "Disconnected"}
         self.controller = blank_controller()
         self.firmware: dict | None = None
-        self.pending_ids: dict[str, float] | None = None
         self.device_id: int | None = None
 
     def log(self, message: str, level: str = "info") -> None:
@@ -267,38 +265,6 @@ class UploadService:
         response
         self.controller["app_size"] = f"{size:,} bytes"
 
-    def _write_software_ids(self) -> None:
-        """Save the operator-selected IDs only after image CRC verification."""
-        if self.pending_ids:
-            values = self.pending_ids
-        else:
-            try:
-                values = {
-                    "project_id": float(self.controller["project_id"]),
-                    "firmware_id": float(self.controller["firmware_id"]),
-                }
-            except (TypeError, ValueError) as error:
-                raise RuntimeError("Enter valid project and firmware IDs before starting the update") from error
-
-        self.status.update(phase="Writing software IDs", message="Saving project and firmware IDs")
-        for field, subcommand, label in (
-            ("project_id", SUB_PROJECT_ID, "project ID"),
-            ("firmware_id", SUB_FIRMWARE_ID, "firmware ID"),
-        ):
-            value = values[field]
-            response = self._success(
-                self._request(
-                    self._frame(CMD_SOFTWARE_ID, subcommand, CAN_WRITE, struct.pack("<f", value)),
-                    f"Write {label}",
-                    self._reply(CMD_SOFTWARE_ID, CAN_WRITE, subcommand),
-                ),
-                f"{label} write",
-            )
-            response
-            self.controller[field] = f"{value:.1f}"
-            self.log(f"{label.capitalize()} saved: {value:.1f}", "success")
-        self.pending_ids = None
-
     def _app_jump(self) -> None:
         profile = self._device_profile()
         if profile["app_jump_ack"]:
@@ -333,7 +299,6 @@ class UploadService:
         self._send_firmware(image)
         self.status.update(phase="Validating CRC", message="Comparing firmware CRC")
         self._verify_crc(image)
-        self._write_software_ids()
         self.status.update(phase="Saving application size", message="Writing final image size")
         self._write_size(len(image))
         self.status.update(phase="Starting application", message="Jumping to updated application")
@@ -377,21 +342,6 @@ class UploadService:
 
     def start_force_update(self) -> None:
         self._start_job("Preparing forced firmware update", self._force_upload)
-
-    def stage_software_ids(self, project_id: object, firmware_id: object) -> dict[str, float]:
-        if self.status["busy"]:
-            raise RuntimeError("Wait for the active controller operation to finish")
-        try:
-            values = {"project_id": float(project_id), "firmware_id": float(firmware_id)}
-        except (TypeError, ValueError) as error:
-            raise RuntimeError("Project ID and firmware ID must be numeric values") from error
-        if any(not math.isfinite(value) or value < 0 for value in values.values()):
-            raise RuntimeError("Project ID and firmware ID must be finite non-negative values")
-        if any(value != round(value, 1) for value in values.values()):
-            raise RuntimeError("Project ID and firmware ID can have at most one digit after the decimal point")
-        self.pending_ids = values
-        self.log(f"Software IDs queued for post-CRC update: project {values['project_id']:.1f}, firmware {values['firmware_id']:.1f}", "success")
-        return values
 
     def clear_firmware(self) -> None:
         if self.status["busy"]:
@@ -487,13 +437,6 @@ def force_update():
     return jsonify({"ok": True})
 
 
-@app.post("/api/software-ids")
-def stage_software_ids():
-    data = request.get_json(force=True)
-    values = service.stage_software_ids(data.get("project_id"), data.get("firmware_id"))
-    return jsonify({"ok": True, "pending_ids": values})
-
-
 @app.post("/api/logs/clear")
 def clear_logs():
     service.clear_logs()
@@ -512,7 +455,6 @@ def status():
         "status": service.status,
         "controller": service.controller,
         "firmware": firmware,
-        "pending_ids": service.pending_ids,
         "logs": logs,
         "log_generation": service.log_generation,
     })
