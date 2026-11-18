@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import struct
 import threading
 import time
 import zlib
@@ -24,13 +23,13 @@ BOOT_CAN_ID_HOST = 0x0B0
 BOOT_CAN_ID_CLIENT = 0x0B1
 CAN_READ, CAN_WRITE, CAN_COMPARE = 0x01, 0x02, 0x03
 CAN_SUCCESS = 0x01
-CMD_PIC_ID, CMD_SOFTWARE_ID, CMD_STATUS = 0x01, 0x02, 0x03
+CAN_OPERATION_SHIFT, CAN_STATUS_SHIFT = 5, 3
+CMD_PIC_ID = 0x01
 CMD_APP_SIZE, CMD_JUMP, CMD_APP_ERASE, CMD_APP_CHUNK, CMD_APP_CRC = 0x04, 0x05, 0x06, 0x07, 0x08
 CMD_STAY_IN_BOOT = 0x09
 SUB_MAC_WORDS = (0x01, 0x02, 0x03, 0x04)
-SUB_DEVICE_ID, SUB_PROJECT_ID, SUB_FIRMWARE_ID, SUB_BOOT_VERSION = 0x05, 0x01, 0x02, 0x03
+SUB_DEVICE_ID = 0x05
 SUB_BOOT_JUMP, SUB_APP_JUMP = 0x01, 0x02
-STATUS_NAMES = {0x01: "Bootloader", 0x02: "Application", 0x03: "Unknown"}
 DEVICE_UPLOAD_PROFILES = {
     # The firmware data transfer is shared: 1 KiB chunks composed of 256 four-byte CAN frames.
     # PIC32MK enters its application before sending a final APP_JUMP acknowledgement.
@@ -98,6 +97,11 @@ class UploadService:
     def _frame(command: int, subcommand: int = 0, operation: int = 0, value: bytes = b"") -> bytes:
         return bytes([command, subcommand, operation, 0]) + value.ljust(4, b"\x00")[:4]
 
+    @staticmethod
+    def _pic_id_frame(subcommand: int) -> bytes:
+        """Build a PIC-ID read request for the current bootloader framing."""
+        return bytes([CMD_PIC_ID, subcommand, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
+
     def _send(self, payload: bytes, description: str) -> None:
         self._adapter().send(BOOT_CAN_ID_HOST, payload)
         self.log(f"TX 0x{BOOT_CAN_ID_HOST:03X}  {payload.hex(' ').upper()}  · {description}")
@@ -118,6 +122,21 @@ class UploadService:
     @staticmethod
     def _reply(command: int, operation: int, subcommand: int | None = None) -> Callable[[bytes], bool]:
         return lambda data: len(data) >= 4 and data[0] == command and data[2] == operation and (subcommand is None or data[1] == subcommand)
+
+    @staticmethod
+    def _pic_id_reply(subcommand: int) -> Callable[[bytes], bool]:
+        return lambda data: (
+            len(data) >= 8
+            and data[0] == CMD_PIC_ID
+            and data[1] == subcommand
+            and data[2] == 0
+        )
+
+    @staticmethod
+    def _pic_id_success(reply: bytes, label: str) -> bytes:
+        if ((reply[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
+            raise RuntimeError(f"Controller rejected: {label}")
+        return reply
 
     def _request(self, payload: bytes, description: str, matches: Callable[[bytes], bool], timeout: float = 2.5) -> bytes:
         for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
@@ -147,36 +166,23 @@ class UploadService:
         self.status.update(phase="Reading controller information", message="Reading device data over CAN")
         values: list[int] = []
         for word in SUB_MAC_WORDS:
-            response = self._success(self._request(self._frame(CMD_PIC_ID, word, CAN_READ), f"Read MAC ID word {word}", self._reply(CMD_PIC_ID, CAN_READ, word)), f"MAC ID word {word}")
+            response = self._pic_id_success(
+                self._request(self._pic_id_frame(word), f"Read MAC ID word {word}", self._pic_id_reply(word)),
+                f"MAC ID word {word}",
+            )
             values.append(int.from_bytes(response[4:8], "big"))
         self.controller["mac_id"] = "-".join(f"{value:08X}" for value in values)
 
-        response = self._success(self._request(self._frame(CMD_PIC_ID, SUB_DEVICE_ID, CAN_READ), "Read device ID", self._reply(CMD_PIC_ID, CAN_READ, SUB_DEVICE_ID)), "device ID")
+        response = self._pic_id_success(
+            self._request(self._pic_id_frame(SUB_DEVICE_ID), "Read device ID", self._pic_id_reply(SUB_DEVICE_ID)),
+            "device ID",
+        )
         device_id = int.from_bytes(response[4:8], "big")
         self.device_id = device_id
         self.controller["device_id"] = f"0x{device_id:08X}"
         self.controller["device_name"] = DEVICE_NAMES.get(device_id, "Unknown PIC32 device")
-
-        for field, subcommand, label in (
-            ("project_id", SUB_PROJECT_ID, "project ID"),
-            ("firmware_id", SUB_FIRMWARE_ID, "firmware ID"),
-            ("boot_version", SUB_BOOT_VERSION, "boot version"),
-        ):
-            response = self._success(self._request(self._frame(CMD_SOFTWARE_ID, subcommand, CAN_READ), f"Read {label}", self._reply(CMD_SOFTWARE_ID, CAN_READ, subcommand)), label)
-            self.controller[field] = f"{struct.unpack('<f', response[4:8])[0]:.1f}"
-
-        response = self._success(self._request(self._frame(CMD_STATUS, 0, CAN_READ), "Read controller status", self._reply(CMD_STATUS, CAN_READ)), "controller status")
-        self.controller["status"] = STATUS_NAMES.get(response[1], f"Unknown (0x{response[1]:02X})")
-
-        response = self._success(self._request(self._frame(CMD_APP_SIZE, 0, CAN_READ), "Read application size", self._reply(CMD_APP_SIZE, CAN_READ)), "application size")
-        self.controller["app_size"] = f"{int.from_bytes(response[4:8], 'big'):,} bytes"
-
-        # A new/unprogrammed controller returns FAIL for CRC because it has no stored size.
-        try:
-            response = self._success(self._request(self._frame(CMD_APP_CRC, 0, CAN_READ), "Read application CRC", self._reply(CMD_APP_CRC, CAN_READ), 6.0), "application CRC")
-            self.controller["crc"] = f"0x{int.from_bytes(response[4:8], 'big'):08X}"
-        except RuntimeError:
-            self.controller["crc"] = "Not available (no stored application)"
+        for field in ("project_id", "firmware_id", "boot_version", "status", "app_size", "crc"):
+            self.controller[field] = "—"
         self.status.update(phase="Ready", message="Controller information updated")
         self.log("Controller information read successfully", "success")
 
