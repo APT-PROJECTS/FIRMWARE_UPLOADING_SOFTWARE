@@ -18,7 +18,7 @@ BASE_DIR = Path(__file__).resolve().parent
 UPLOAD_DIR = BASE_DIR / "uploads"
 UPLOAD_DIR.mkdir(exist_ok=True)
 
-# PIC32MK bootloader CAN protocol, defined in src/middleware/boot_handler.h.
+# PIC32AK bootloader CAN protocol, defined in src/middleware/boot.[ch].
 BOOT_CAN_ID_HOST = 0x0B0
 BOOT_CAN_ID_CLIENT = 0x0B1
 CAN_READ, CAN_WRITE, CAN_COMPARE = 0x01, 0x02, 0x03
@@ -55,7 +55,7 @@ BOOT_VERSION_LENGTH = 5
 FIRMWARE_ID_LENGTH = 37
 METADATA_TRANSMITTED_LENGTH = MCU_ID_LENGTH + FIRMWARE_ID_LENGTH - 1
 METADATA_CHUNK_COUNT = (METADATA_TRANSMITTED_LENGTH + METADATA_CHUNK_SIZE - 1) // METADATA_CHUNK_SIZE
-EXPECTED_STAY_IN_BOOT_REPLY = bytes([CMD_STAY_IN_BOOT, 0, 0, CAN_SUCCESS, 0, 0, 0, 0])
+EXPECTED_STAY_IN_BOOT_REPLY = bytes([CMD_STAY_IN_BOOT, 0, 0, CAN_SUCCESS << CAN_STATUS_SHIFT, 0, 0, 0, 0])
 
 app = Flask(__name__)
 app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # The controller application area is below 1 MiB.
@@ -109,7 +109,8 @@ class UploadService:
 
     @staticmethod
     def _frame(command: int, subcommand: int = 0, operation: int = 0, value: bytes = b"") -> bytes:
-        return bytes([command, subcommand, operation, 0]) + value.ljust(4, b"\x00")[:4]
+        """Build a frame for the bootloader's byte-3 operation/status layout."""
+        return bytes([command, subcommand, 0, operation << CAN_OPERATION_SHIFT]) + value.ljust(4, b"\x00")[:4]
 
     @staticmethod
     def _pic_id_frame(subcommand: int) -> bytes:
@@ -149,8 +150,8 @@ class UploadService:
         raise TimeoutError("Timed out waiting for the controller response")
 
     @staticmethod
-    def _reply(command: int, operation: int, subcommand: int | None = None) -> Callable[[bytes], bool]:
-        return lambda data: len(data) >= 4 and data[0] == command and data[2] == operation and (subcommand is None or data[1] == subcommand)
+    def _reply(command: int, subcommand: int | None = None) -> Callable[[bytes], bool]:
+        return lambda data: len(data) >= 4 and data[0] == command and data[2] == 0 and (subcommand is None or data[1] == subcommand)
 
     @staticmethod
     def _pic_id_reply(subcommand: int) -> Callable[[bytes], bool]:
@@ -266,7 +267,7 @@ class UploadService:
 
     @staticmethod
     def _success(reply: bytes, label: str) -> bytes:
-        if reply[3] != CAN_SUCCESS:
+        if ((reply[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
             raise RuntimeError(f"Controller rejected: {label}")
         return reply
 
@@ -308,7 +309,7 @@ class UploadService:
         self.log("Controller information read successfully", "success")
 
     def _boot_jump(self) -> None:
-        response = self._success(self._request(self._frame(CMD_JUMP, SUB_BOOT_JUMP), "Jump to bootloader", self._reply(CMD_JUMP, 0, SUB_BOOT_JUMP), 6.0), "bootloader jump")
+        response = self._success(self._request(self._frame(CMD_JUMP, SUB_BOOT_JUMP), "Jump to bootloader", self._reply(CMD_JUMP, SUB_BOOT_JUMP), 6.0), "bootloader jump")
         response  # Keeps the successful acknowledgement explicit for traceability.
         self.log("Controller is in bootloader mode", "success")
         time.sleep(0.25)
@@ -317,7 +318,7 @@ class UploadService:
         """Keep transmitting STAY_IN_BOOT while the controller is being reset.
 
         The bootloader services command 0x09 during its startup window and
-        replies with 09 00 00 01 00 00 00 00 when it has remained active.
+        replies with 09 00 00 08 00 00 00 00 when it has remained active.
         """
         self.status.update(phase="Force update", message="Probing bootloader; reset the controller if needed")
         probe = self._frame(CMD_STAY_IN_BOOT)
@@ -340,11 +341,11 @@ class UploadService:
         return False
 
     def _validate_size(self, size: int) -> None:
-        response = self._success(self._request(self._frame(CMD_APP_SIZE, 0, CAN_COMPARE, size.to_bytes(4, "big")), "Validate firmware size", self._reply(CMD_APP_SIZE, CAN_COMPARE)), "firmware size")
+        response = self._success(self._request(self._frame(CMD_APP_SIZE, 0, CAN_COMPARE, size.to_bytes(4, "big")), "Validate firmware size", self._reply(CMD_APP_SIZE)), "firmware size")
         response
 
     def _erase(self) -> None:
-        response = self._success(self._request(self._frame(CMD_APP_ERASE), "Erase application flash", self._reply(CMD_APP_ERASE, 0), 20.0), "application erase")
+        response = self._success(self._request(self._frame(CMD_APP_ERASE), "Erase application flash", self._reply(CMD_APP_ERASE), 20.0), "application erase")
         response
 
     def _send_firmware(self, image: bytes) -> None:
@@ -357,7 +358,8 @@ class UploadService:
             chunk = image[start:start + CHUNK_SIZE].ljust(CHUNK_SIZE, b"\xFF")
             for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
                 for offset in range(0, CHUNK_SIZE, FRAME_PAYLOAD_SIZE):
-                    # Command, chunk number, write, reserved, then four binary bytes.
+                    # Command, chunk number, reserved, write operation in byte 3,
+                    # then four binary bytes.
                     # Keep the browser log compact: one entry represents these 256 CAN frames.
                     self._adapter().send(
                         BOOT_CAN_ID_HOST,
@@ -369,7 +371,7 @@ class UploadService:
                     f"({min(start + CHUNK_SIZE, len(image)):,}/{len(image):,} bytes) · attempt {attempt}/{MAX_REQUEST_ATTEMPTS}"
                 )
                 try:
-                    response = self._success(self._wait_for(self._reply(CMD_APP_CHUNK, CAN_WRITE, chunk_index), 7.0), f"chunk {number + 1}")
+                    response = self._success(self._wait_for(self._reply(CMD_APP_CHUNK, chunk_index), 7.0), f"chunk {number + 1}")
                     response
                     break
                 except TimeoutError:
@@ -380,7 +382,10 @@ class UploadService:
 
     def _verify_crc(self, image: bytes) -> None:
         host_crc = zlib.crc32(image) & 0xFFFFFFFF
-        response = self._success(self._request(self._frame(CMD_APP_CRC, 0, CAN_READ), "Validate application CRC", self._reply(CMD_APP_CRC, CAN_READ), 10.0), "application CRC")
+        response = self._success(
+            self._request(self._app_crc_frame(), "Validate application CRC", self._app_crc_reply, 10.0),
+            "application CRC",
+        )
         device_crc = int.from_bytes(response[4:8], "big")
         self.controller["crc"] = f"0x{device_crc:08X}"
         if device_crc != host_crc:
@@ -388,7 +393,7 @@ class UploadService:
         self.log(f"CRC verified: 0x{device_crc:08X}", "success")
 
     def _write_size(self, size: int) -> None:
-        response = self._success(self._request(self._frame(CMD_APP_SIZE, 0, CAN_WRITE, size.to_bytes(4, "big")), "Write application size", self._reply(CMD_APP_SIZE, CAN_WRITE)), "application size write")
+        response = self._success(self._request(self._frame(CMD_APP_SIZE, 0, CAN_WRITE, size.to_bytes(4, "big")), "Write application size", self._reply(CMD_APP_SIZE)), "application size write")
         response
         self.controller["app_size"] = f"{size:,} bytes"
 
@@ -397,7 +402,7 @@ class UploadService:
         if profile["app_jump_ack"]:
             # PIC32AK confirms APP_JUMP before it enters the application.
             self._success(
-                self._request(self._frame(CMD_JUMP, SUB_APP_JUMP), "Jump to application", self._reply(CMD_JUMP, 0, SUB_APP_JUMP), 4.0),
+                self._request(self._frame(CMD_JUMP, SUB_APP_JUMP), "Jump to application", self._reply(CMD_JUMP, SUB_APP_JUMP), 4.0),
                 "application jump",
             )
             self.log("PIC32AK application-jump acknowledgement received", "success")
