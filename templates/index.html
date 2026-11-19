@@ -55,10 +55,10 @@
     </section>
 
     <section class="card log-card">
-      <div class="log-head"><div class="section-heading"><span class="section-number">04</span><div><h2>Bootloader CAN activity</h2><p>Only CAN IDs <code>0x0B0</code> and <code>0x0B1</code> are shown.</p></div></div><button id="clear-log" class="button text">Clear log</button></div>
+      <div class="log-head"><div class="section-heading"><span class="section-number">04</span><div><h2>Bootloader CAN activity</h2><p>Only CAN IDs <code>0x0B0</code> and <code>0x0B1</code> are shown.</p></div></div><div class="log-actions"><button id="download-log" class="button text">Download log</button><button id="clear-log" class="button text">Clear log</button></div></div>
       <div id="log-output" class="log-output" aria-live="polite"><span class="muted">Waiting for bootloader activity…</span></div>
     </section>
   </main>
-  <script src="{{ url_for('static', filename='app.js') }}?v=20261119-metadata-ids"></script>
+  <script src="{{ url_for('static', filename='app.js') }}?v=20261119-download-log"></script>
 </body>
 </html>

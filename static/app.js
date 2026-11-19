@@ -155,6 +155,7 @@ $('force-update').addEventListener('click', guarded(async () => {
   if (!window.confirm('Force update keeps the bootloader active while the controller is reset, then erases and programs the selected firmware. Continue?')) return;
   await api('/api/force-update', { method: 'POST' }); await pollStatus();
 }));
+$('download-log').addEventListener('click', () => { window.location.assign('/api/logs/download'); });
 $('clear-log').addEventListener('click', guarded(async () => { await api('/api/logs/clear', { method: 'POST' }); await pollStatus(); }));
 
 refreshPorts().catch(() => {});

@@ -7,7 +7,7 @@ from collections import deque
 from pathlib import Path
 from typing import Callable
 
-from flask import Flask, jsonify, render_template, request
+from flask import Flask, Response, jsonify, render_template, request
 from serial.tools import list_ports
 from werkzeug.utils import secure_filename
 
@@ -573,6 +573,21 @@ def force_update():
 def clear_logs():
     service.clear_logs()
     return jsonify({"ok": True})
+
+
+@app.get("/api/logs/download")
+def download_logs():
+    content = "\n".join(
+        f"{entry['time']} [{str(entry['level']).upper()}] {entry['message']}"
+        for entry in service.logs
+    )
+    if content:
+        content += "\n"
+    return Response(
+        content,
+        mimetype="text/plain",
+        headers={"Content-Disposition": "attachment; filename=bootloader-can-log.txt"},
+    )
 
 
 @app.get("/api/status")
