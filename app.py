@@ -126,6 +126,11 @@ class UploadService:
         """Build a controller-mode read request for the current bootloader framing."""
         return bytes([CMD_STATUS, 0, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
 
+    @staticmethod
+    def _app_crc_frame() -> bytes:
+        """Build an application-CRC read request for the current bootloader framing."""
+        return bytes([CMD_APP_CRC, 0, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
+
     def _send(self, payload: bytes, description: str) -> None:
         self._adapter().send(BOOT_CAN_ID_HOST, payload)
         self.log(f"TX 0x{BOOT_CAN_ID_HOST:03X}  {payload.hex(' ').upper()}  · {description}")
@@ -192,6 +197,21 @@ class UploadService:
             self._request(self._status_frame(), "Read controller mode", self._status_reply)
         )
         return MODE_NAMES.get(response[1], f"Unknown (0x{response[1]:02X})")
+
+    @staticmethod
+    def _app_crc_reply(data: bytes) -> bool:
+        return len(data) >= 8 and data[0] == CMD_APP_CRC and data[1] == 0 and data[2] == 0
+
+    def _read_application_crc(self) -> str:
+        response = self._request(
+            self._app_crc_frame(),
+            "Read application CRC",
+            self._app_crc_reply,
+            6.0,
+        )
+        if ((response[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
+            return "Not available"
+        return f"0x{int.from_bytes(response[4:8], 'big'):08X}"
 
     @staticmethod
     def _format_application_size(raw_size: bytes) -> str:
@@ -277,14 +297,13 @@ class UploadService:
         self.controller["device_id"] = f"0x{device_id:08X}"
         self.controller["device_name"] = DEVICE_NAMES.get(device_id, "Unknown PIC32 device")
         self.controller["status"] = self._read_controller_mode()
+        self.controller["crc"] = self._read_application_crc()
         (
             self.controller["mcu_id"],
             self.controller["firmware_id"],
             self.controller["app_size"],
             self.controller["boot_version"],
         ) = self._read_metadata_info()
-        for field in ("crc",):
-            self.controller[field] = "—"
         self.status.update(phase="Ready", message="Controller information updated")
         self.log("Controller information read successfully", "success")
 
