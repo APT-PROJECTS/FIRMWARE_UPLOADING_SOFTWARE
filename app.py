@@ -24,7 +24,7 @@ BOOT_CAN_ID_CLIENT = 0x0B1
 CAN_READ, CAN_WRITE, CAN_COMPARE = 0x01, 0x02, 0x03
 CAN_SUCCESS = 0x01
 CAN_OPERATION_SHIFT, CAN_STATUS_SHIFT = 5, 3
-CMD_PIC_ID = 0x01
+CMD_PIC_ID, CMD_METADATA = 0x01, 0x02
 CMD_APP_SIZE, CMD_JUMP, CMD_APP_ERASE, CMD_APP_CHUNK, CMD_APP_CRC = 0x04, 0x05, 0x06, 0x07, 0x08
 CMD_STAY_IN_BOOT = 0x09
 SUB_MAC_WORDS = (0x01, 0x02, 0x03, 0x04)
@@ -41,6 +41,19 @@ DEVICE_UPLOAD_PROFILES = {
 DEVICE_NAMES = {device_id: profile["name"] for device_id, profile in DEVICE_UPLOAD_PROFILES.items()}
 CHUNK_SIZE, FRAME_PAYLOAD_SIZE, MAX_REQUEST_ATTEMPTS = 1024, 4, 5
 FORCE_PROBE_ATTEMPTS = 1000
+METADATA_CHUNK_SIZE = 4
+MCU_ID_LENGTH = 34
+PART_NUMBER_LENGTH = 7
+MODEL_NUMBER_LENGTH = 11
+APPLICATION_VERSION_LENGTH = 5
+FIRMWARE_IDENTIFIER_LENGTH = PART_NUMBER_LENGTH + MODEL_NUMBER_LENGTH + 4 + APPLICATION_VERSION_LENGTH
+APPLICATION_SIZE_LENGTH = 4
+BOOT_VERSION_LENGTH = 5
+# The controller reserves the final Firmware-ID byte (stayInBootFlag) for
+# internal use, so the uploader receives and displays the other 36 bytes.
+FIRMWARE_ID_LENGTH = 37
+METADATA_TRANSMITTED_LENGTH = MCU_ID_LENGTH + FIRMWARE_ID_LENGTH - 1
+METADATA_CHUNK_COUNT = (METADATA_TRANSMITTED_LENGTH + METADATA_CHUNK_SIZE - 1) // METADATA_CHUNK_SIZE
 EXPECTED_STAY_IN_BOOT_REPLY = bytes([CMD_STAY_IN_BOOT, 0, 0, CAN_SUCCESS, 0, 0, 0, 0])
 
 app = Flask(__name__)
@@ -49,7 +62,7 @@ app.config["MAX_CONTENT_LENGTH"] = 2 * 1024 * 1024  # The controller application
 
 def blank_controller() -> dict[str, str]:
     return {
-        "mac_id": "—", "device_id": "—", "device_name": "—", "project_id": "—",
+        "mac_id": "—", "device_id": "—", "device_name": "—", "mcu_id": "—",
         "firmware_id": "—", "boot_version": "—", "status": "—", "app_size": "—", "crc": "—",
     }
 
@@ -102,6 +115,11 @@ class UploadService:
         """Build a PIC-ID read request for the current bootloader framing."""
         return bytes([CMD_PIC_ID, subcommand, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
 
+    @staticmethod
+    def _metadata_frame(chunk_number: int) -> bytes:
+        """Build a metadata-chunk read request for the current bootloader framing."""
+        return bytes([CMD_METADATA, chunk_number, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
+
     def _send(self, payload: bytes, description: str) -> None:
         self._adapter().send(BOOT_CAN_ID_HOST, payload)
         self.log(f"TX 0x{BOOT_CAN_ID_HOST:03X}  {payload.hex(' ').upper()}  · {description}")
@@ -137,6 +155,61 @@ class UploadService:
         if ((reply[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
             raise RuntimeError(f"Controller rejected: {label}")
         return reply
+
+    @staticmethod
+    def _metadata_reply(chunk_number: int) -> Callable[[bytes], bool]:
+        return lambda data: (
+            len(data) >= 8
+            and data[0] == CMD_METADATA
+            and data[1] == chunk_number
+            and data[2] == 0
+        )
+
+    @staticmethod
+    def _metadata_success(reply: bytes, label: str) -> bytes:
+        if ((reply[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
+            raise RuntimeError(f"Controller rejected: {label}")
+        return reply
+
+    @staticmethod
+    def _format_application_size(raw_size: bytes) -> str:
+        if raw_size in (b"\x00\x00\x00\x00", b"\xff\xff\xff\xff", b"****"):
+            return "Not available"
+        if raw_size.isdigit():
+            size = int(raw_size.decode("ascii"))
+        else:
+            size = int.from_bytes(raw_size, "big")
+        return f"{size:,} bytes"
+
+    @staticmethod
+    def _format_boot_version(raw_version: bytes) -> str:
+        version = raw_version.decode("ascii", errors="replace").rstrip("\x00")
+        if len(version) == BOOT_VERSION_LENGTH and version.isascii() and version.isprintable():
+            return f"{version[0]}.{version[1:3]}.{version[3:]}"
+        return version or "Not available"
+
+    def _read_metadata_info(self) -> tuple[str, str, str, str]:
+        metadata = bytearray()
+        for chunk_number in range(1, METADATA_CHUNK_COUNT + 1):
+            response = self._metadata_success(
+                self._request(
+                    self._metadata_frame(chunk_number),
+                    f"Read metadata chunk {chunk_number}/{METADATA_CHUNK_COUNT}",
+                    self._metadata_reply(chunk_number),
+                ),
+                f"metadata chunk {chunk_number}",
+            )
+            metadata.extend(response[4:8])
+
+        transmitted = bytes(metadata[:METADATA_TRANSMITTED_LENGTH])
+        mcu_id = transmitted[:MCU_ID_LENGTH].decode("ascii", errors="replace").rstrip("\x00")
+        firmware_metadata = transmitted[MCU_ID_LENGTH:]
+        firmware_id = firmware_metadata[:FIRMWARE_IDENTIFIER_LENGTH].decode("ascii", errors="replace").rstrip("\x00")
+        app_size_start = FIRMWARE_IDENTIFIER_LENGTH
+        app_size_end = app_size_start + APPLICATION_SIZE_LENGTH
+        application_size = self._format_application_size(firmware_metadata[app_size_start:app_size_end])
+        boot_version = self._format_boot_version(firmware_metadata[app_size_end:app_size_end + BOOT_VERSION_LENGTH])
+        return mcu_id, firmware_id, application_size, boot_version
 
     def _request(self, payload: bytes, description: str, matches: Callable[[bytes], bool], timeout: float = 2.5) -> bytes:
         for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
@@ -181,7 +254,13 @@ class UploadService:
         self.device_id = device_id
         self.controller["device_id"] = f"0x{device_id:08X}"
         self.controller["device_name"] = DEVICE_NAMES.get(device_id, "Unknown PIC32 device")
-        for field in ("project_id", "firmware_id", "boot_version", "status", "app_size", "crc"):
+        (
+            self.controller["mcu_id"],
+            self.controller["firmware_id"],
+            self.controller["app_size"],
+            self.controller["boot_version"],
+        ) = self._read_metadata_info()
+        for field in ("status", "crc"):
             self.controller[field] = "—"
         self.status.update(phase="Ready", message="Controller information updated")
         self.log("Controller information read successfully", "success")

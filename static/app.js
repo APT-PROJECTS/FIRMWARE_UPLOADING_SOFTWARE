@@ -1,5 +1,5 @@
 const $ = (id) => document.getElementById(id);
-const controllerFields = ['mac_id', 'device_id', 'device_name', 'project_id', 'firmware_id', 'boot_version', 'status', 'app_size', 'crc'];
+const controllerFields = ['mac_id', 'device_id', 'device_name', 'mcu_id', 'firmware_id', 'boot_version', 'status', 'app_size', 'crc'];
 let latestLogId = 0;
 let logGeneration = null;
 
