@@ -24,7 +24,7 @@ BOOT_CAN_ID_CLIENT = 0x0B1
 CAN_READ, CAN_WRITE, CAN_COMPARE = 0x01, 0x02, 0x03
 CAN_SUCCESS = 0x01
 CAN_OPERATION_SHIFT, CAN_STATUS_SHIFT = 5, 3
-CMD_PIC_ID, CMD_METADATA = 0x01, 0x02
+CMD_PIC_ID, CMD_METADATA, CMD_STATUS = 0x01, 0x02, 0x03
 CMD_APP_SIZE, CMD_JUMP, CMD_APP_ERASE, CMD_APP_CHUNK, CMD_APP_CRC = 0x04, 0x05, 0x06, 0x07, 0x08
 CMD_STAY_IN_BOOT = 0x09
 SUB_MAC_WORDS = (0x01, 0x02, 0x03, 0x04)
@@ -39,6 +39,7 @@ DEVICE_UPLOAD_PROFILES = {
     0x00009DA3: {"name": "PIC32AK1216GC41064", "family": "PIC32AK", "app_jump_ack": True},
 }
 DEVICE_NAMES = {device_id: profile["name"] for device_id, profile in DEVICE_UPLOAD_PROFILES.items()}
+MODE_NAMES = {0x01: "Bootloader", 0x02: "Application", 0x03: "Unknown"}
 CHUNK_SIZE, FRAME_PAYLOAD_SIZE, MAX_REQUEST_ATTEMPTS = 1024, 4, 5
 FORCE_PROBE_ATTEMPTS = 1000
 METADATA_CHUNK_SIZE = 4
@@ -120,6 +121,11 @@ class UploadService:
         """Build a metadata-chunk read request for the current bootloader framing."""
         return bytes([CMD_METADATA, chunk_number, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
 
+    @staticmethod
+    def _status_frame() -> bytes:
+        """Build a controller-mode read request for the current bootloader framing."""
+        return bytes([CMD_STATUS, 0, 0, CAN_READ << CAN_OPERATION_SHIFT, 0, 0, 0, 0])
+
     def _send(self, payload: bytes, description: str) -> None:
         self._adapter().send(BOOT_CAN_ID_HOST, payload)
         self.log(f"TX 0x{BOOT_CAN_ID_HOST:03X}  {payload.hex(' ').upper()}  · {description}")
@@ -170,6 +176,22 @@ class UploadService:
         if ((reply[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
             raise RuntimeError(f"Controller rejected: {label}")
         return reply
+
+    @staticmethod
+    def _status_reply(data: bytes) -> bool:
+        return len(data) >= 8 and data[0] == CMD_STATUS and data[2] == 0
+
+    @staticmethod
+    def _status_success(reply: bytes) -> bytes:
+        if ((reply[3] >> CAN_STATUS_SHIFT) & 0x03) != CAN_SUCCESS:
+            raise RuntimeError("Controller rejected: mode read")
+        return reply
+
+    def _read_controller_mode(self) -> str:
+        response = self._status_success(
+            self._request(self._status_frame(), "Read controller mode", self._status_reply)
+        )
+        return MODE_NAMES.get(response[1], f"Unknown (0x{response[1]:02X})")
 
     @staticmethod
     def _format_application_size(raw_size: bytes) -> str:
@@ -254,13 +276,14 @@ class UploadService:
         self.device_id = device_id
         self.controller["device_id"] = f"0x{device_id:08X}"
         self.controller["device_name"] = DEVICE_NAMES.get(device_id, "Unknown PIC32 device")
+        self.controller["status"] = self._read_controller_mode()
         (
             self.controller["mcu_id"],
             self.controller["firmware_id"],
             self.controller["app_size"],
             self.controller["boot_version"],
         ) = self._read_metadata_info()
-        for field in ("status", "crc"):
+        for field in ("crc",):
             self.controller[field] = "—"
         self.status.update(phase="Ready", message="Controller information updated")
         self.log("Controller information read successfully", "success")
