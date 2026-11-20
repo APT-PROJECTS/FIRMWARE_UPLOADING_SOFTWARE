@@ -43,3 +43,5 @@
 @media (prefers-reduced-motion:reduce) { .progress-card.is-active .progress-rocket { animation:none; transform:translate(-50%,0) rotate(43deg); } }
 
 .progress-card.is-force-update .progress-track div { background:linear-gradient(90deg,#e8435d,#ff941f); }
+
+:root[data-theme="dark"] .connection-controls select { color-scheme:dark; background:#121c2f; }:root[data-theme="dark"] .connection-controls select option { color:#edf3ff; background:#121c2f; }:root[data-theme="dark"] .connection-controls select option:checked { color:#fff; background:#315d9f; }

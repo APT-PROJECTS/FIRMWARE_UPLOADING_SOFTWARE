@@ -46,6 +46,18 @@ function updatePreview() {
   $('mcu-id-preview').textContent = value || '—';
 }
 
+function setCurrentYearMonth() {
+  const field = form.elements.year_month;
+  if (field.value) return;
+  const today = new Date();
+  field.value = `${String(today.getFullYear() % 100).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function setDefaultBrandName() {
+  const field = form.elements.brand_name;
+  if (!field.value) field.value = 'APT';
+}
+
 function renderConnection(status) {
   connectedPort = status.port || '';
   if (connectedPort && [...$('port').options].some((option) => option.value === connectedPort)) {
@@ -166,6 +178,8 @@ $('clear-mcu-id-form').addEventListener('click', async () => {
   try {
     await api('/api/controller/clear', { method: 'POST' });
     form.reset();
+    setDefaultBrandName();
+    setCurrentYearMonth();
     updatePreview();
     statusText.textContent = '';
     $('controller-mcu-qr').hidden = true;
@@ -230,6 +244,8 @@ form.addEventListener('submit', async (event) => {
     setBusy(false);
   }
 });
+setDefaultBrandName();
+setCurrentYearMonth();
 updatePreview();
 refreshPorts().catch(() => {});
 setInterval(() => { getStatus().catch(() => {}); }, 700);
