@@ -4,9 +4,11 @@ import threading
 import time
 import zlib
 from collections import deque
+from io import BytesIO
 from pathlib import Path
 from typing import Callable
 
+import qrcode
 from flask import Flask, Response, jsonify, render_template, request
 from serial.tools import list_ports
 from werkzeug.utils import secure_filename
@@ -55,6 +57,27 @@ BOOT_VERSION_LENGTH = 5
 FIRMWARE_ID_LENGTH = 37
 METADATA_TRANSMITTED_LENGTH = MCU_ID_LENGTH + FIRMWARE_ID_LENGTH - 1
 METADATA_CHUNK_COUNT = (METADATA_TRANSMITTED_LENGTH + METADATA_CHUNK_SIZE - 1) // METADATA_CHUNK_SIZE
+MCU_ID_WRITE_CHUNK_COUNT = (MCU_ID_LENGTH + FRAME_PAYLOAD_SIZE - 1) // FRAME_PAYLOAD_SIZE
+MCU_ID_FIELD_LENGTHS = {
+    "brand_name": 3,
+    "phases": 1,
+    "switches_in_parallel": 1,
+    "switch_type": 1,
+    "pcb_type": 1,
+    "connector": 2,
+    "coms": 2,
+    "sensor": 1,
+    "ntc_resistor": 3,
+    "ntc_volt": 1,
+    "ntc_value_b": 2,
+    "ems": 2,
+    "year_month": 4,
+    "batch_number": 4,
+    "sequence_number": 6,
+}
+PART_NUMBER_FIELDS = ("brand_name", "phases", "switches_in_parallel", "switch_type", "pcb_type")
+MODEL_NUMBER_FIELDS = ("connector", "coms", "sensor", "ntc_resistor", "ntc_volt", "ntc_value_b")
+SERIAL_NUMBER_FIELDS = ("ems", "year_month", "batch_number", "sequence_number")
 EXPECTED_STAY_IN_BOOT_REPLY = bytes([CMD_STAY_IN_BOOT, 0, 0, CAN_SUCCESS << CAN_STATUS_SHIFT, 0, 0, 0, 0])
 
 app = Flask(__name__)
@@ -77,7 +100,7 @@ class UploadService:
         self.logs: deque[dict[str, str | int]] = deque(maxlen=1200)
         self.log_sequence = 0
         self.log_generation = 0
-        self.status = {"connected": False, "busy": False, "phase": "Idle", "progress": 0, "message": "Disconnected"}
+        self.status = {"connected": False, "port": None, "busy": False, "force_update": False, "phase": "Idle", "progress": 0, "message": "Disconnected"}
         self.controller = blank_controller()
         self.firmware: dict | None = None
         self.device_id: int | None = None
@@ -91,7 +114,7 @@ class UploadService:
             self.disconnect()
             self.adapter = WaveshareCANA(port, bitrate)
             self.port = port
-            self.status.update(connected=True, busy=False, phase="Ready", progress=0, message=f"Connected to {port}")
+            self.status.update(connected=True, port=port, busy=False, force_update=False, phase="Ready", progress=0, message=f"Connected to {port}")
             self.log(f"Connected to Waveshare USB-CAN on {port} at {bitrate:,} bit/s", "success")
 
     def disconnect(self) -> None:
@@ -100,7 +123,7 @@ class UploadService:
                 self.adapter.close()
             self.adapter = None
             self.port = None
-            self.status.update(connected=False, busy=False, phase="Idle", progress=0, message="Disconnected")
+            self.status.update(connected=False, port=None, busy=False, force_update=False, phase="Idle", progress=0, message="Disconnected")
 
     def _adapter(self) -> WaveshareCANA:
         if not self.adapter:
@@ -231,7 +254,7 @@ class UploadService:
             return f"{version[0]}.{version[1:3]}.{version[3:]}"
         return version or "Not available"
 
-    def _read_metadata_info(self) -> tuple[str, str, str, str]:
+    def _read_metadata_bytes(self) -> bytes:
         metadata = bytearray()
         for chunk_number in range(1, METADATA_CHUNK_COUNT + 1):
             response = self._metadata_success(
@@ -243,8 +266,10 @@ class UploadService:
                 f"metadata chunk {chunk_number}",
             )
             metadata.extend(response[4:8])
+        return bytes(metadata[:METADATA_TRANSMITTED_LENGTH])
 
-        transmitted = bytes(metadata[:METADATA_TRANSMITTED_LENGTH])
+    def _read_metadata_info(self) -> tuple[str, str, str, str]:
+        transmitted = self._read_metadata_bytes()
         mcu_id = transmitted[:MCU_ID_LENGTH].decode("ascii", errors="replace").rstrip("\x00")
         firmware_metadata = transmitted[MCU_ID_LENGTH:]
         firmware_id = firmware_metadata[:FIRMWARE_IDENTIFIER_LENGTH].decode("ascii", errors="replace").rstrip("\x00")
@@ -253,6 +278,84 @@ class UploadService:
         application_size = self._format_application_size(firmware_metadata[app_size_start:app_size_end])
         boot_version = self._format_boot_version(firmware_metadata[app_size_end:app_size_end + BOOT_VERSION_LENGTH])
         return mcu_id, firmware_id, application_size, boot_version
+
+    def _read_mcu_id_and_firmware_id(self) -> None:
+        self.status.update(phase="Reading MCU ID", message="Reading MCU ID and Firmware ID over CAN")
+        metadata = self._read_metadata_bytes()
+        self.controller["mcu_id"] = self._text_metadata_value(metadata[:MCU_ID_LENGTH]).rstrip("\x00")
+        self.controller["firmware_id"] = self._text_metadata_value(
+            metadata[MCU_ID_LENGTH:MCU_ID_LENGTH + FIRMWARE_IDENTIFIER_LENGTH]
+        ).rstrip("\x00")
+        self.status.update(phase="Ready", message="MCU ID and Firmware ID updated")
+        self.log("MCU ID and Firmware ID read successfully", "success")
+
+    @staticmethod
+    def _text_metadata_value(value: bytes) -> str:
+        return value.decode("ascii", errors="replace")
+
+    @staticmethod
+    def _build_mcu_id(fields: dict[str, object]) -> tuple[bytes, bytes, bytes]:
+        values: dict[str, bytes] = {}
+        for field, length in MCU_ID_FIELD_LENGTHS.items():
+            value = fields.get(field)
+            if not isinstance(value, str) or len(value) != length:
+                raise RuntimeError(f"{field.replace('_', ' ').title()} must contain exactly {length} characters")
+            try:
+                encoded = value.encode("ascii")
+            except UnicodeEncodeError as error:
+                raise RuntimeError(f"{field.replace('_', ' ').title()} must use printable ASCII characters") from error
+            if any(byte < 0x20 or byte > 0x7E for byte in encoded):
+                raise RuntimeError(f"{field.replace('_', ' ').title()} must use printable ASCII characters")
+            values[field] = encoded
+
+        part_number = b"".join(values[field] for field in PART_NUMBER_FIELDS)
+        model_number = b"".join(values[field] for field in MODEL_NUMBER_FIELDS)
+        serial_number = b"".join(values[field] for field in SERIAL_NUMBER_FIELDS)
+        mcu_id = part_number + model_number + serial_number
+        if len(mcu_id) != MCU_ID_LENGTH:
+            raise AssertionError("MCU ID field lengths do not total 34 bytes")
+        return mcu_id, part_number, model_number
+
+    def _write_mcu_id(self, mcu_id: bytes) -> None:
+        for chunk_number in range(1, MCU_ID_WRITE_CHUNK_COUNT + 1):
+            offset = (chunk_number - 1) * FRAME_PAYLOAD_SIZE
+            response = self._success(
+                self._request(
+                    self._frame(CMD_METADATA, chunk_number, CAN_WRITE, mcu_id[offset:offset + FRAME_PAYLOAD_SIZE]),
+                    f"Write MCU ID chunk {chunk_number}/{MCU_ID_WRITE_CHUNK_COUNT}",
+                    self._reply(CMD_METADATA, chunk_number),
+                ),
+                f"MCU ID chunk {chunk_number} write",
+            )
+            response
+
+    def _flash_mcu_id(self, mcu_id: bytes, part_number: bytes, model_number: bytes) -> None:
+        self.status.update(phase="Reading metadata", message="Checking controller metadata before MCU ID update")
+        metadata = self._read_metadata_bytes()
+        stored_mcu_id = metadata[:MCU_ID_LENGTH]
+        stored_firmware_id = metadata[MCU_ID_LENGTH:]
+        stored_part_number = stored_firmware_id[:PART_NUMBER_LENGTH]
+        stored_model_number = stored_firmware_id[PART_NUMBER_LENGTH:PART_NUMBER_LENGTH + MODEL_NUMBER_LENGTH]
+        self.controller["mcu_id"] = self._text_metadata_value(stored_mcu_id).rstrip("\x00")
+        self.controller["firmware_id"] = self._text_metadata_value(
+            stored_firmware_id[:FIRMWARE_IDENTIFIER_LENGTH]
+        )
+
+        if stored_mcu_id != b"*" * MCU_ID_LENGTH:
+            self.log("MCU ID update blocked: the controller already has an MCU ID", "warning")
+            raise RuntimeError("MCU ID already exists on the controller; it was not changed")
+        if stored_part_number != part_number or stored_model_number != model_number:
+            self.log("MCU ID update blocked: entered Part/Model Number does not match controller firmware metadata", "warning")
+            raise RuntimeError(
+                "Part Number or Model Number does not match the controller firmware metadata "
+                f"({self._text_metadata_value(stored_part_number)} / {self._text_metadata_value(stored_model_number)})"
+            )
+
+        self.status.update(phase="Flashing MCU ID", message="Writing validated MCU ID to controller")
+        self._write_mcu_id(mcu_id)
+        self.controller["mcu_id"] = self._text_metadata_value(mcu_id)
+        self.status.update(phase="Complete", message="MCU ID updated successfully")
+        self.log("MCU ID updated successfully", "success")
 
     def _request(self, payload: bytes, description: str, matches: Callable[[bytes], bool], timeout: float = 2.5) -> bytes:
         for attempt in range(1, MAX_REQUEST_ATTEMPTS + 1):
@@ -445,13 +548,15 @@ class UploadService:
             raise RuntimeError("Bootloader probe failed. Reset or power-cycle the controller, then try Force update again.")
         self.log("Starting validated firmware update from forced bootloader mode", "success")
         self._upload()
+        self.status.update(phase="Complete", message="Force update completed successfully")
+        self.log("Force update completed successfully", "success")
 
-    def _start_job(self, phase: str, task: Callable[[], None]) -> None:
+    def _start_job(self, phase: str, task: Callable[[], None], force_update: bool = False) -> None:
         if not self.status["connected"]:
             raise RuntimeError("Connect the USB-CAN adapter first")
         if not self.job_lock.acquire(blocking=False):
             raise RuntimeError("Another controller operation is already running")
-        self.status.update(busy=True, phase=phase, progress=0, message=phase)
+        self.status.update(busy=True, force_update=force_update, phase=phase, progress=0, message=phase)
 
         def worker() -> None:
             try:
@@ -473,7 +578,21 @@ class UploadService:
         self._start_job("Preparing firmware update", self._upload)
 
     def start_force_update(self) -> None:
-        self._start_job("Preparing forced firmware update", self._force_upload)
+        self._start_job("Preparing forced firmware update", self._force_upload, force_update=True)
+
+    def start_mcu_id_flash(self, fields: dict[str, object]) -> None:
+        mcu_id, part_number, model_number = self._build_mcu_id(fields)
+        self._start_job("Preparing MCU ID update", lambda: self._flash_mcu_id(mcu_id, part_number, model_number))
+
+    def start_mcu_id_read(self) -> None:
+        self._start_job("Reading MCU ID", self._read_mcu_id_and_firmware_id)
+
+    def clear_controller_info(self) -> None:
+        if self.status["busy"]:
+            raise RuntimeError("Wait for the active controller operation to finish")
+        self.controller = blank_controller()
+        self.device_id = None
+        self.log("Controller information cleared")
 
     def clear_firmware(self) -> None:
         if self.status["busy"]:
@@ -503,6 +622,11 @@ service = UploadService()
 @app.get("/")
 def index():
     return render_template("index.html")
+
+
+@app.get("/mcu-id")
+def mcu_id_page():
+    return render_template("mcu_id.html")
 
 
 @app.get("/api/ports")
@@ -557,6 +681,12 @@ def read_controller():
     return jsonify({"ok": True})
 
 
+@app.post("/api/controller/clear")
+def clear_controller_info():
+    service.clear_controller_info()
+    return jsonify({"ok": True})
+
+
 @app.post("/api/update")
 def update():
     service.start_update()
@@ -567,6 +697,29 @@ def update():
 def force_update():
     service.start_force_update()
     return jsonify({"ok": True})
+
+
+@app.post("/api/mcu-id")
+def flash_mcu_id():
+    service.start_mcu_id_flash(request.get_json(force=True))
+    return jsonify({"ok": True})
+
+
+@app.post("/api/mcu-id/read")
+def read_mcu_id():
+    service.start_mcu_id_read()
+    return jsonify({"ok": True})
+
+
+@app.get("/api/mcu-id/qr")
+def mcu_id_qr():
+    mcu_id = service.controller["mcu_id"]
+    if len(mcu_id) != MCU_ID_LENGTH or mcu_id == "*" * MCU_ID_LENGTH:
+        return jsonify({"error": "Read a valid MCU ID before creating its QR code"}), 404
+    image = qrcode.make(mcu_id, border=2, box_size=6)
+    output = BytesIO()
+    image.save(output, format="PNG")
+    return Response(output.getvalue(), mimetype="image/png", headers={"Cache-Control": "no-store"})
 
 
 @app.post("/api/logs/clear")

@@ -8,17 +8,22 @@
   <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
+  <button id="sidebar-overlay" class="sidebar-overlay" type="button" aria-label="Close navigation"></button>
+  <aside id="sidebar" class="sidebar" aria-label="Main navigation">
+    <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">↯</span><span>Service tool</span></div>
+    <nav class="sidebar-nav"><a class="active" href="{{ url_for('index') }}">Firmware update</a><a href="{{ url_for('mcu_id_page') }}">Flash MCU ID</a></nav>
+  </aside>
   <main class="workspace">
     <header class="topbar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">↯</span><div><p>OFFLINE SERVICE TOOL <span class="software-version">v1.0</span></p><h1>AproposDrive Firmware Uploader</h1></div></div>
+      <div class="topbar-start"><button id="sidebar-toggle" class="icon-button" type="button" title="Open navigation" aria-label="Open navigation" aria-expanded="false">☰</button><div class="brand"><span class="brand-mark" aria-hidden="true">↯</span><div><p>OFFLINE SERVICE TOOL <span class="software-version">v1.01.01</span></p><h1>AproposDrive Firmware Uploader</h1></div></div></div>
       <div class="top-actions"><span id="connection-pill" class="connection-pill offline"><i></i>Disconnected</span><button id="theme-toggle" class="icon-button" title="Toggle colour mode" aria-label="Toggle colour mode">☼</button></div>
     </header>
 
     <section class="card connection-card">
-      <div class="section-heading"><span class="section-number">01</span><div><h2>USB-CAN connection</h2><p>Connect the Waveshare USB-CAN-A adapter to the controller CAN bus.</p></div></div>
+      <div class="section-heading"><span class="section-number">01</span><div><h2>USB-CAN connection</h2></div></div>
       <div class="connection-controls">
         <label>COM port<select id="port" aria-label="COM port"><option>Refresh to find ports</option></select></label>
-        <button id="refresh" class="button secondary">Refresh</button>
+        <button id="refresh" class="button secondary icon-only refresh-icon icon-tooltip" aria-label="Refresh COM ports" data-tooltip="Refresh COM ports"><span class="button-icon" aria-hidden="true"><img class="refresh-image" src="{{ url_for('static', filename='refresh.png') }}" alt=""></span></button>
         <label>CAN bitrate<select id="bitrate" aria-label="CAN bitrate"><option value="1000000">1 Mbit/s</option><option value="500000" selected>500 kbit/s</option><option value="250000">250 kbit/s</option><option value="125000">125 kbit/s</option></select></label>
         <button id="connect" class="button primary">Connect</button>
         <button id="disconnect" class="button danger">Disconnect</button>
@@ -27,38 +32,41 @@
 
     <section class="card progress-card">
       <div class="progress-copy"><div><span id="phase" class="phase">Idle</span><p id="status-message">Connect a USB-CAN adapter to begin.</p></div><strong id="progress-label">0%</strong></div>
-      <div class="progress-track" role="progressbar" aria-label="Firmware upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar"></div></div>
+      <div class="progress-track" role="progressbar" aria-label="Firmware upload progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><div id="progress-bar"></div><span id="progress-rocket" class="progress-rocket" aria-hidden="true">🚀</span></div>
     </section>
 
     <section class="grid">
       <section class="card firmware-card">
-        <div class="section-heading"><span class="section-number">02</span><div><h2>Firmware image</h2><p>Select a compiled application binary from this computer.</p></div></div>
+        <div class="section-heading"><span class="section-number">02</span><div><h2>Firmware image</h2></div></div>
         <label id="drop-zone" class="drop-zone"><input id="firmware-file" type="file" accept=".bin,application/octet-stream"><span class="upload-glyph">↑</span><strong>Choose a <code>.bin</code> file</strong><small>File remains local to this offline service tool.</small></label>
-        <div class="file-info-row"><div id="file-info" class="file-info"><span>No firmware image selected</span></div><button id="clear-firmware" class="clear-firmware" type="button" title="Remove selected firmware" aria-label="Remove selected firmware" hidden>&times;</button></div>
-        <div class="firmware-actions"><button id="read-info" class="button secondary">Read controller info</button><button id="force-update" class="button danger" title="Keep the bootloader active after a controller reset">Force update</button><button id="start-update" class="button primary">Firmware update <span aria-hidden="true">→</span></button></div>
+        <div class="file-info-row"><div id="file-info" class="file-info"><span>No firmware image selected</span></div><button id="clear-firmware" class="clear-firmware" type="button" aria-label="Remove selected firmware" hidden><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div>
+        <div class="firmware-actions"><button id="force-update" class="button danger icon-only force-update-icon icon-tooltip" type="button" aria-label="Force update" data-tooltip="Force update"><span class="button-icon" aria-hidden="true"><img class="force-update-image" src="{{ url_for('static', filename='force-update.png') }}" alt=""></span></button><button id="start-update" class="button primary icon-only firmware-update-icon icon-tooltip" type="button" aria-label="Firmware update" data-tooltip="Firmware update"><span class="button-icon" aria-hidden="true"><img class="update-image" src="{{ url_for('static', filename='update.png') }}" alt=""></span></button></div>
       </section>
 
       <section class="card controller-card">
-        <div class="section-heading"><span class="section-number">03</span><div><h2>Controller information</h2><p>Live values read through the bootloader protocol.</p></div></div>
+        <div class="controller-head"><div class="section-heading"><span class="section-number">03</span><div><h2>Controller information</h2></div></div><div class="controller-head-actions"><button id="read-info" class="button secondary icon-only controller-read-icon icon-tooltip" type="button" aria-label="Read controller information" data-tooltip="Read controller information"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/><path d="M9 2v4M12 2v4M15 2v4M9 18v4M12 18v4M15 18v4M2 9h4M2 12h4M2 15h4M18 9h4M18 12h4M18 15h4"/></svg></span></button><button id="clear-controller-info" class="button text icon-only" type="button" aria-label="Clear controller information"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
         <dl class="controller-info">
           <div><dt>MAC ID</dt><dd id="mac_id">—</dd></div>
           <div><dt>Device ID</dt><dd id="device_id">—</dd></div>
           <div><dt>Device name</dt><dd id="device_name">—</dd></div>
-          <div><dt>MCU ID</dt><dd id="mcu_id">—</dd></div>
-          <div><dt>Firmware ID</dt><dd id="firmware_id">—</dd></div>
+          <div><dt>MCU ID</dt><dd class="value-with-copy"><span id="mcu_id">—</span><button class="copy-value-button icon-tooltip" type="button" data-copy-source="mcu_id" data-copy-label="MCU ID" aria-label="Copy MCU ID" data-tooltip="Copy MCU ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button></dd></div>
+          <div><dt>Firmware ID</dt><dd class="value-with-copy"><span id="firmware_id">—</span><button class="copy-value-button icon-tooltip" type="button" data-copy-source="firmware_id" data-copy-label="Firmware ID" aria-label="Copy Firmware ID" data-tooltip="Copy Firmware ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button></dd></div>
           <div><dt>Boot version</dt><dd id="boot_version">—</dd></div>
           <div><dt>Mode</dt><dd id="status">—</dd></div>
           <div><dt>Application size</dt><dd id="app_size">—</dd></div>
           <div><dt>Application CRC</dt><dd id="crc">—</dd></div>
         </dl>
+        <div id="controller-mcu-qr" class="controller-mcu-qr" hidden><span>MCU ID QR</span><img id="controller-mcu-qr-image" alt="QR code for controller MCU ID"></div>
       </section>
     </section>
 
     <section class="card log-card">
-      <div class="log-head"><div class="section-heading"><span class="section-number">04</span><div><h2>Bootloader CAN activity</h2><p>Only CAN IDs <code>0x0B0</code> and <code>0x0B1</code> are shown.</p></div></div><div class="log-actions"><button id="download-log" class="button text">Download log</button><button id="clear-log" class="button text">Clear log</button></div></div>
+      <div class="log-head"><div class="section-heading"><span class="section-number">04</span><div><h2>CAN log</h2></div></div><div class="log-actions"><button id="download-log" class="button text icon-only" aria-label="Download CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v3h16v-3"/></svg></span></button><button id="clear-log" class="button text icon-only" aria-label="Clear CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
       <div id="log-output" class="log-output" aria-live="polite"><span class="muted">Waiting for bootloader activity…</span></div>
     </section>
   </main>
+  <script src="{{ url_for('static', filename='notifications.js') }}?v=20261119-toast"></script>
+  <script src="{{ url_for('static', filename='navigation.js') }}?v=20261119-sidebar"></script>
   <script src="{{ url_for('static', filename='app.js') }}?v=20261119-download-log"></script>
 </body>
 </html>

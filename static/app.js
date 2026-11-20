@@ -2,6 +2,8 @@ const $ = (id) => document.getElementById(id);
 const controllerFields = ['mac_id', 'device_id', 'device_name', 'mcu_id', 'firmware_id', 'boot_version', 'status', 'app_size', 'crc'];
 let latestLogId = 0;
 let logGeneration = null;
+let connectedPort = '';
+let expectedSuccessMessage = null;
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -20,9 +22,29 @@ async function api(url, options = {}) {
   return data;
 }
 
-function showError(error) { window.alert(error.message || String(error)); }
+function showError(error) { window.showNotification(error.message || String(error)); }
+
+async function copyValue(sourceId, label) {
+  const value = $(sourceId).textContent.trim();
+  if (!value || value === '—') throw new Error(`No ${label} is available to copy`);
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(value);
+  } else {
+    const temporary = document.createElement('textarea');
+    temporary.value = value;
+    document.body.append(temporary);
+    temporary.select();
+    document.execCommand('copy');
+    temporary.remove();
+  }
+  window.showNotification(`${label} copied`, 'success');
+}
 
 function setButtonState(status) {
+  connectedPort = status.port || '';
+  if (connectedPort && [...$('port').options].some((option) => option.value === connectedPort)) {
+    $('port').value = connectedPort;
+  }
   $('connect').disabled = status.connected || status.busy;
   $('disconnect').disabled = !status.connected || status.busy;
   $('refresh').disabled = status.busy;
@@ -34,6 +56,7 @@ function setButtonState(status) {
 async function refreshPorts() {
   const ports = await api('/api/ports');
   const select = $('port');
+  const selectedPort = connectedPort || select.value;
   select.replaceChildren();
   if (!ports.length) {
     const option = new Option('No serial ports found', '');
@@ -41,6 +64,7 @@ async function refreshPorts() {
     return;
   }
   ports.forEach((port) => select.add(new Option(`${port.device} — ${port.description || 'Serial device'}`, port.device)));
+  if ([...select.options].some((option) => option.value === selectedPort)) select.value = selectedPort;
 }
 
 function addLogRow(output, entry) {
@@ -77,11 +101,28 @@ function renderStatus(data) {
   $('status-message').textContent = status.message;
   $('progress-label').textContent = `${status.progress}%`;
   $('progress-bar').style.width = `${status.progress}%`;
-  document.querySelector('.progress-track')?.setAttribute('aria-valuenow', String(status.progress));
+  const progressTrack = document.querySelector('.progress-track');
+  progressTrack?.setAttribute('aria-valuenow', String(status.progress));
+  $('progress-rocket').style.left = `${status.progress}%`;
+  const progressCard = document.querySelector('.progress-card');
+  progressCard?.classList.toggle('is-active', status.busy);
+  progressCard?.classList.toggle('is-force-update', Boolean(status.force_update));
   const pill = $('connection-pill');
   pill.className = `connection-pill ${status.connected ? 'online' : 'offline'}`;
   pill.lastChild.textContent = status.connected ? 'Connected' : 'Disconnected';
   controllerFields.forEach((field) => { $(field).textContent = controller[field] || '—'; });
+  const mcuId = controller.mcu_id || '—';
+  const hasMcuId = mcuId.length === 34 && mcuId !== '*'.repeat(34);
+  const mcuQr = $('controller-mcu-qr');
+  const mcuQrImage = $('controller-mcu-qr-image');
+  mcuQr.hidden = !hasMcuId;
+  if (hasMcuId && mcuQrImage.dataset.mcuId !== mcuId) {
+    mcuQrImage.dataset.mcuId = mcuId;
+    mcuQrImage.src = `/api/mcu-id/qr?id=${encodeURIComponent(mcuId)}`;
+  } else if (!hasMcuId) {
+    delete mcuQrImage.dataset.mcuId;
+    mcuQrImage.removeAttribute('src');
+  }
   const dropZone = $('drop-zone');
   const clearFirmware = $('clear-firmware');
   dropZone.classList.toggle('firmware-loaded', Boolean(firmware));
@@ -91,6 +132,15 @@ function renderStatus(data) {
     ? `${firmware.name} · ${Number(firmware.size).toLocaleString()} bytes · ${firmware.crc}`
     : 'No firmware image selected';
   setButtonState(status);
+  if (expectedSuccessMessage && !status.busy) {
+    if (status.message === expectedSuccessMessage) {
+      window.showNotification(status.message, 'success');
+      expectedSuccessMessage = null;
+    } else if (status.phase === 'Error') {
+      window.showNotification(status.message);
+      expectedSuccessMessage = null;
+    }
+  }
   renderLogs(logs, log_generation);
 }
 
@@ -149,14 +199,32 @@ dropZone.addEventListener('drop', guarded(async (event) => {
   const [file] = event.dataTransfer.files;
   await uploadFirmware(file);
 }));
-$('read-info').addEventListener('click', guarded(async () => { await api('/api/controller/read', { method: 'POST' }); await pollStatus(); }));
-$('start-update').addEventListener('click', guarded(async () => { await api('/api/update', { method: 'POST' }); await pollStatus(); }));
-$('force-update').addEventListener('click', guarded(async () => {
-  if (!window.confirm('Force update keeps the bootloader active while the controller is reset, then erases and programs the selected firmware. Continue?')) return;
-  await api('/api/force-update', { method: 'POST' }); await pollStatus();
+$('read-info').addEventListener('click', guarded(async () => {
+  await api('/api/controller/read', { method: 'POST' });
+  expectedSuccessMessage = 'Controller information updated';
+  await pollStatus();
 }));
+$('clear-controller-info').addEventListener('click', guarded(async () => {
+  await api('/api/controller/clear', { method: 'POST' });
+  await pollStatus();
+}));
+$('start-update').addEventListener('click', guarded(async () => {
+  await api('/api/update', { method: 'POST' });
+  expectedSuccessMessage = 'Firmware update completed successfully';
+  await pollStatus();
+}));
+$('force-update').addEventListener('click', () => {
+  window.showWarningConfirmation('Force update keeps the bootloader active while the controller is reset, then erases and programs the selected firmware.', guarded(async () => {
+  await api('/api/force-update', { method: 'POST' });
+  expectedSuccessMessage = 'Force update completed successfully';
+  await pollStatus();
+  }));
+});
 $('download-log').addEventListener('click', () => { window.location.assign('/api/logs/download'); });
 $('clear-log').addEventListener('click', guarded(async () => { await api('/api/logs/clear', { method: 'POST' }); await pollStatus(); }));
+document.querySelectorAll('[data-copy-source]').forEach((button) => {
+  button.addEventListener('click', guarded(() => copyValue(button.dataset.copySource, button.dataset.copyLabel)));
+});
 
 refreshPorts().catch(() => {});
 pollStatus();

@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <title>MCU ID Provisioning · AproposDrive Firmware Uploader</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+  <button id="sidebar-overlay" class="sidebar-overlay" type="button" aria-label="Close navigation"></button>
+  <aside id="sidebar" class="sidebar" aria-label="Main navigation">
+    <div class="sidebar-brand"><span class="brand-mark" aria-hidden="true">↯</span><span>Service tool</span></div>
+    <nav class="sidebar-nav"><a href="{{ url_for('index') }}">Firmware update</a><a class="active" href="{{ url_for('mcu_id_page') }}">Flash MCU ID</a></nav>
+  </aside>
+  <main class="workspace">
+    <header class="topbar">
+      <div class="topbar-start"><button id="sidebar-toggle" class="icon-button" type="button" title="Open navigation" aria-label="Open navigation" aria-expanded="false">☰</button><div class="brand"><span class="brand-mark" aria-hidden="true">↯</span><div><p>OFFLINE SERVICE TOOL <span class="software-version">v1.01.01</span></p><h1>MCU ID Provisioning</h1></div></div></div>
+      <div class="top-actions"><span id="connection-pill" class="connection-pill offline"><i></i>Disconnected</span><button id="theme-toggle" class="icon-button" title="Toggle colour mode" aria-label="Toggle colour mode">☼</button></div>
+    </header>
+
+    <section class="card connection-card">
+      <div class="section-heading"><span class="section-number">01</span><div><h2>USB-CAN connection</h2></div></div>
+      <div class="connection-controls">
+        <label>COM port<select id="port" aria-label="COM port"><option>Refresh to find ports</option></select></label>
+        <button id="refresh" class="button secondary icon-only refresh-icon icon-tooltip" type="button" aria-label="Refresh COM ports" data-tooltip="Refresh COM ports"><span class="button-icon" aria-hidden="true"><img class="refresh-image" src="{{ url_for('static', filename='refresh.png') }}" alt=""></span></button>
+        <label>CAN bitrate<select id="bitrate" aria-label="CAN bitrate"><option value="1000000">1 Mbit/s</option><option value="500000" selected>500 kbit/s</option><option value="250000">250 kbit/s</option><option value="125000">125 kbit/s</option></select></label>
+        <button id="connect" class="button primary" type="button">Connect</button>
+        <button id="disconnect" class="button danger" type="button">Disconnect</button>
+      </div>
+    </section>
+
+    <section class="card mcu-id-card">
+      <div class="mcu-id-head"><div class="section-heading"><span class="section-number">02</span><div><h2>Build MCU ID</h2></div></div><button id="clear-mcu-id-form" class="button text icon-only" type="button" aria-label="Clear MCU ID form"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div>
+      <form id="mcu-id-form" class="mcu-id-form">
+        <fieldset class="mcu-id-section">
+          <legend>Part number</legend>
+          <div class="mcu-id-fields">
+            <label>Brand name <input name="brand_name" maxlength="3" minlength="3" required></label>
+            <label>Phases <input name="phases" maxlength="1" minlength="1" required></label>
+            <label>Switches in parallel <input name="switches_in_parallel" maxlength="1" minlength="1" required></label>
+            <label>Switch type <input name="switch_type" maxlength="1" minlength="1" required></label>
+            <label>PCB type <input name="pcb_type" maxlength="1" minlength="1" required></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="mcu-id-section">
+          <legend>Model number</legend>
+          <div class="mcu-id-fields">
+            <label>Connector <input name="connector" maxlength="2" minlength="2" required></label>
+            <label>COMS <input name="coms" maxlength="2" minlength="2" required></label>
+            <label>Sensor <input name="sensor" maxlength="1" minlength="1" required></label>
+            <label>NTC resistor <input name="ntc_resistor" maxlength="3" minlength="3" required></label>
+            <label>NTC volt <input name="ntc_volt" maxlength="1" minlength="1" required></label>
+            <label>NTC value B <input name="ntc_value_b" maxlength="2" minlength="2" required></label>
+          </div>
+        </fieldset>
+
+        <fieldset class="mcu-id-section">
+          <legend>Serial number</legend>
+          <div class="mcu-id-fields">
+            <label>EMS <input name="ems" maxlength="2" minlength="2" required></label>
+            <label>Year / month <input name="year_month" maxlength="4" minlength="4" required></label>
+            <label>Batch number <input name="batch_number" maxlength="4" minlength="4" required></label>
+            <label>Sequence number <input name="sequence_number" maxlength="6" minlength="6" required></label>
+          </div>
+        </fieldset>
+
+        <div class="mcu-id-preview"><span>Generated MCU ID · 34 bytes</span><code id="mcu-id-preview">—</code></div>
+        <div class="mcu-id-preview"><span>Controller MCU ID</span><div class="value-with-copy"><code id="controller-mcu-id">—</code><button class="copy-value-button icon-tooltip" type="button" data-copy-source="controller-mcu-id" data-copy-label="MCU ID" aria-label="Copy MCU ID" data-tooltip="Copy MCU ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button></div></div>
+        <div id="controller-mcu-qr" class="mcu-id-qr" hidden><span>Controller MCU ID QR</span><img id="mcu-id-qr-image" alt="QR code for controller MCU ID"></div>
+        <div class="mcu-id-preview"><span>Controller Firmware ID</span><div class="value-with-copy"><code id="controller-firmware-id">—</code><button class="copy-value-button icon-tooltip" type="button" data-copy-source="controller-firmware-id" data-copy-label="Firmware ID" aria-label="Copy Firmware ID" data-tooltip="Copy Firmware ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button></div></div>
+        <div class="mcu-id-actions"><button id="read-mcu-id" class="button secondary icon-only controller-read-icon icon-tooltip" type="button" aria-label="Read MCU ID and Firmware ID" data-tooltip="Read MCU ID and Firmware ID"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/><path d="M9 2v4M12 2v4M15 2v4M9 18v4M12 18v4M15 18v4M2 9h4M2 12h4M2 15h4M18 9h4M18 12h4M18 15h4"/></svg></span></button><button id="flash-mcu-id" class="button primary" type="submit">Flash MCU ID</button><span id="mcu-id-status" role="status"></span></div>
+      </form>
+    </section>
+
+    <section class="card log-card mcu-id-log">
+      <div class="log-head"><div class="section-heading"><span class="section-number">03</span><div><h2>CAN log</h2></div></div><div class="log-actions"><button id="download-log" class="button text icon-only" type="button" aria-label="Download CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v3h16v-3"/></svg></span></button><button id="clear-log" class="button text icon-only" type="button" aria-label="Clear CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
+      <div id="log-output" class="log-output" aria-live="polite"><span class="muted">Waiting for bootloader activity…</span></div>
+    </section>
+  </main>
+  <script src="{{ url_for('static', filename='notifications.js') }}?v=20261119-toast"></script>
+  <script src="{{ url_for('static', filename='navigation.js') }}?v=20261119-sidebar"></script>
+  <script src="{{ url_for('static', filename='mcu-id.js') }}?v=20261119-mcu-id"></script>
+</body>
+</html>
