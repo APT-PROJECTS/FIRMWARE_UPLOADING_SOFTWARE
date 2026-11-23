@@ -2,6 +2,7 @@ const $ = (id) => document.getElementById(id);
 const fields = [...document.querySelectorAll('#mcu-id-form input')];
 const form = $('mcu-id-form');
 const statusText = $('mcu-id-status');
+const MCU_ID_CONFIGURATION_KEY = 'pic32mkMcuIdConfiguration';
 let latestLogId = 0;
 let logGeneration = null;
 let connectedPort = '';
@@ -46,16 +47,31 @@ function updatePreview() {
   $('mcu-id-preview').textContent = value || '—';
 }
 
-function setCurrentYearMonth() {
-  const field = form.elements.year_month;
-  if (field.value) return;
+function currentYearMonth() {
   const today = new Date();
-  field.value = `${String(today.getFullYear() % 100).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}`;
+  return `${String(today.getFullYear() % 100).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}`;
 }
 
-function setDefaultBrandName() {
-  const field = form.elements.brand_name;
-  if (!field.value) field.value = 'APT';
+function getMcuIdConfiguration() {
+  try {
+    const value = JSON.parse(localStorage.getItem(MCU_ID_CONFIGURATION_KEY) || '{}');
+    return value && typeof value === 'object' ? value : {};
+  } catch {
+    return {};
+  }
+}
+
+function applyMcuIdConfiguration() {
+  const config = getMcuIdConfiguration();
+  const values = {
+    brand_name: config.brand_name || 'APT',
+    model_type: ['phases', 'switches_in_parallel', 'switch_type', 'pcb_type'].map((name) => config[name] || '').join(''),
+    application_type: ['sensor', 'ntc_resistor', 'ntc_volt', 'ntc_value_b'].map((name) => config[name] || '').join(''),
+    ems: config.ems || '',
+    year_month: config.year_month || currentYearMonth(),
+    batch_number: config.batch_number || '',
+  };
+  Object.entries(values).forEach(([name, value]) => { form.elements[name].value = value; });
 }
 
 function renderConnection(status) {
@@ -178,8 +194,7 @@ $('clear-mcu-id-form').addEventListener('click', async () => {
   try {
     await api('/api/controller/clear', { method: 'POST' });
     form.reset();
-    setDefaultBrandName();
-    setCurrentYearMonth();
+    applyMcuIdConfiguration();
     updatePreview();
     statusText.textContent = '';
     $('controller-mcu-qr').hidden = true;
@@ -244,8 +259,7 @@ form.addEventListener('submit', async (event) => {
     setBusy(false);
   }
 });
-setDefaultBrandName();
-setCurrentYearMonth();
+applyMcuIdConfiguration();
 updatePreview();
 refreshPorts().catch(() => {});
 setInterval(() => { getStatus().catch(() => {}); }, 700);

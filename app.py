@@ -622,6 +622,11 @@ def mcu_id_page():
     return render_template("mcu_id.html")
 
 
+@app.get("/mcu-id/configuration")
+def mcu_id_configuration_page():
+    return render_template("mcu_id_configuration.html")
+
+
 @app.get("/api/ports")
 def ports():
     return jsonify([{"device": port.device, "description": port.description} for port in list_ports.comports()])

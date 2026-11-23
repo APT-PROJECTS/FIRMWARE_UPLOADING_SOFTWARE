@@ -31,7 +31,7 @@
     </section>
 
     <section class="card mcu-id-card">
-      <div class="mcu-id-head"><div class="section-heading"><span class="section-number">02</span><div><h2>Build MCU ID</h2></div></div><button id="clear-mcu-id-form" class="button text icon-only" type="button" aria-label="Clear MCU ID form"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div>
+      <div class="mcu-id-head"><div class="section-heading"><span class="section-number">02</span><div><h2>Build MCU ID</h2></div></div><div class="mcu-id-head-actions"><a class="button text icon-only config-icon icon-tooltip" href="{{ url_for('mcu_id_configuration_page') }}" aria-label="Open MCU ID configuration" data-tooltip="MCU ID configuration"><span class="button-icon" aria-hidden="true"><img class="cogwheel-image" src="{{ url_for('static', filename='cogwheel.png') }}" alt=""></span></a><button id="clear-mcu-id-form" class="button text icon-only" type="button" aria-label="Clear MCU ID form"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
       <form id="mcu-id-form" class="mcu-id-form">
         <fieldset class="mcu-id-section">
           <legend>Part number</legend>
@@ -74,6 +74,6 @@
   </main>
   <script src="{{ url_for('static', filename='notifications.js') }}?v=20261119-toast"></script>
   <script src="{{ url_for('static', filename='navigation.js') }}?v=20261119-sidebar"></script>
-  <script src="{{ url_for('static', filename='mcu-id.js') }}?v=20261119-mcu-id"></script>
+  <script src="{{ url_for('static', filename='mcu-id.js') }}?v=20261123-configuration"></script>
 </body>
 </html>
