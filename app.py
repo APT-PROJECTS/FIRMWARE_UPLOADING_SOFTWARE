@@ -60,23 +60,16 @@ METADATA_CHUNK_COUNT = (METADATA_TRANSMITTED_LENGTH + METADATA_CHUNK_SIZE - 1) /
 MCU_ID_WRITE_CHUNK_COUNT = (MCU_ID_LENGTH + FRAME_PAYLOAD_SIZE - 1) // FRAME_PAYLOAD_SIZE
 MCU_ID_FIELD_LENGTHS = {
     "brand_name": 3,
-    "phases": 1,
-    "switches_in_parallel": 1,
-    "switch_type": 1,
-    "pcb_type": 1,
-    "connector": 2,
-    "coms": 2,
-    "sensor": 1,
-    "ntc_resistor": 3,
-    "ntc_volt": 1,
-    "ntc_value_b": 2,
+    "model_type": 4,
+    "version_code": 4,
+    "application_type": 7,
     "ems": 2,
     "year_month": 4,
     "batch_number": 4,
     "sequence_number": 6,
 }
-PART_NUMBER_FIELDS = ("brand_name", "phases", "switches_in_parallel", "switch_type", "pcb_type")
-MODEL_NUMBER_FIELDS = ("connector", "coms", "sensor", "ntc_resistor", "ntc_volt", "ntc_value_b")
+PART_NUMBER_FIELDS = ("brand_name", "model_type")
+MODEL_NUMBER_FIELDS = ("version_code", "application_type")
 SERIAL_NUMBER_FIELDS = ("ems", "year_month", "batch_number", "sequence_number")
 EXPECTED_STAY_IN_BOOT_REPLY = bytes([CMD_STAY_IN_BOOT, 0, 0, CAN_SUCCESS << CAN_STATUS_SHIFT, 0, 0, 0, 0])
 
