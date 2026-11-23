@@ -4,6 +4,8 @@ let latestLogId = 0;
 let logGeneration = null;
 let connectedPort = '';
 let expectedSuccessMessage = null;
+const forceUpdatePasswordModal = $('force-update-password-modal');
+const forceUpdatePasswordForm = $('force-update-password-form');
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -165,6 +167,19 @@ async function uploadFirmware(file = $('firmware-file').files[0]) {
 
 function guarded(task) { return async (...args) => { try { await task(...args); } catch (error) { showError(error); } }; }
 
+function openForceUpdatePassword() {
+  $('force-update-password').value = '';
+  forceUpdatePasswordModal.hidden = false;
+  document.body.classList.add('password-modal-open');
+  $('force-update-password').focus();
+}
+
+function closeForceUpdatePassword() {
+  forceUpdatePasswordModal.hidden = true;
+  document.body.classList.remove('password-modal-open');
+  $('force-update').focus();
+}
+
 loadTheme();
 $('theme-toggle').addEventListener('click', () => {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
@@ -213,13 +228,31 @@ $('start-update').addEventListener('click', guarded(async () => {
   expectedSuccessMessage = 'Firmware update completed successfully';
   await pollStatus();
 }));
-$('force-update').addEventListener('click', () => {
-  window.showWarningConfirmation('Force update keeps the bootloader active while the controller is reset, then erases and programs the selected firmware.', guarded(async () => {
-  await api('/api/force-update', { method: 'POST' });
-  expectedSuccessMessage = 'Force update completed successfully';
-  await pollStatus();
-  }));
+$('force-update').addEventListener('click', openForceUpdatePassword);
+$('close-force-update-password').addEventListener('click', closeForceUpdatePassword);
+forceUpdatePasswordModal.addEventListener('click', (event) => { if (event.target === forceUpdatePasswordModal) closeForceUpdatePassword(); });
+document.addEventListener('keydown', (event) => { if (event.key === 'Escape' && !forceUpdatePasswordModal.hidden) closeForceUpdatePassword(); });
+document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const input = $(button.dataset.passwordToggle);
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    button.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    button.dataset.tooltip = visible ? 'Hide password' : 'Show password';
+  });
 });
+forceUpdatePasswordForm.addEventListener('submit', guarded(async (event) => {
+  event.preventDefault();
+  if (!forceUpdatePasswordForm.reportValidity()) return;
+  const password = $('force-update-password').value;
+  await api('/api/auth/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+  closeForceUpdatePassword();
+  window.showWarningConfirmation('Force update keeps the bootloader active while the controller is reset, then erases and programs the selected firmware.', guarded(async () => {
+    await api('/api/force-update', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ password }) });
+    expectedSuccessMessage = 'Force update completed successfully';
+    await pollStatus();
+  }));
+}));
 $('download-log').addEventListener('click', () => { window.location.assign('/api/logs/download'); });
 $('clear-log').addEventListener('click', guarded(async () => { await api('/api/logs/clear', { method: 'POST' }); await pollStatus(); }));
 document.querySelectorAll('[data-copy-source]').forEach((button) => {

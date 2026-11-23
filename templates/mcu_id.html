@@ -31,30 +31,30 @@
     </section>
 
     <section class="card mcu-id-card">
-      <div class="mcu-id-head"><div class="section-heading"><span class="section-number">02</span><div><h2>Build MCU ID</h2></div></div><div class="mcu-id-head-actions"><a class="button text icon-only config-icon icon-tooltip" href="{{ url_for('mcu_id_configuration_page') }}" aria-label="Open MCU ID configuration" data-tooltip="MCU ID configuration"><span class="button-icon" aria-hidden="true"><img class="cogwheel-image" src="{{ url_for('static', filename='cogwheel.png') }}" alt=""></span></a><button id="clear-mcu-id-form" class="button text icon-only" type="button" aria-label="Clear MCU ID form"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
+      <div class="mcu-id-head"><div class="section-heading"><span class="section-number">02</span><div><h2>Build MCU ID</h2></div></div><div class="mcu-id-head-actions"><button id="open-mcu-id-configuration" class="button text icon-only config-icon icon-tooltip" type="button" aria-label="Open MCU ID configuration" data-tooltip="MCU ID configuration"><span class="button-icon" aria-hidden="true"><img class="cogwheel-image" src="{{ url_for('static', filename='cogwheel.png') }}" alt=""></span></button><button id="clear-mcu-id-form" class="button text icon-only" type="button" aria-label="Clear MCU ID form"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
       <form id="mcu-id-form" class="mcu-id-form">
         <fieldset class="mcu-id-section">
           <legend>Part number</legend>
           <div class="mcu-id-fields">
             <label>Brand name <input name="brand_name" maxlength="3" minlength="3" required readonly></label>
-            <label>Model type <input name="model_type" maxlength="4" minlength="4" required></label>
+            <label>Model type <input name="model_type" maxlength="4" minlength="4" required readonly></label>
           </div>
         </fieldset>
 
         <fieldset class="mcu-id-section">
           <legend>Model number</legend>
           <div class="mcu-id-fields">
-            <label>Version code <input name="version_code" maxlength="4" minlength="4" required></label>
-            <label>Application type <input name="application_type" maxlength="7" minlength="7" required></label>
+            <label>Version code <input name="version_code" maxlength="4" minlength="4" required readonly></label>
+            <label>Application type <input name="application_type" maxlength="7" minlength="7" required readonly></label>
           </div>
         </fieldset>
 
         <fieldset class="mcu-id-section">
           <legend>Serial number</legend>
           <div class="mcu-id-fields">
-            <label>EMS <input name="ems" maxlength="2" minlength="2" required></label>
+            <label>EMS <input name="ems" maxlength="2" minlength="2" required readonly></label>
             <label>Year / month <input name="year_month" maxlength="4" minlength="4" required readonly></label>
-            <label>Batch number <input name="batch_number" maxlength="4" minlength="4" required></label>
+            <label>Batch number <input name="batch_number" maxlength="4" minlength="4" required readonly></label>
             <label>Sequence number <input name="sequence_number" maxlength="6" minlength="6" required></label>
           </div>
         </fieldset>
@@ -63,7 +63,7 @@
         <div class="mcu-id-preview"><span>Controller MCU ID</span><div class="value-with-copy"><code id="controller-mcu-id">—</code><button class="copy-value-button icon-tooltip" type="button" data-copy-source="controller-mcu-id" data-copy-label="MCU ID" aria-label="Copy MCU ID" data-tooltip="Copy MCU ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button></div></div>
         <div id="controller-mcu-qr" class="mcu-id-qr" hidden><span>Controller MCU ID QR</span><img id="mcu-id-qr-image" alt="QR code for controller MCU ID"></div>
         <div class="mcu-id-preview"><span>Controller Firmware ID</span><div class="value-with-copy"><code id="controller-firmware-id">—</code><button class="copy-value-button icon-tooltip" type="button" data-copy-source="controller-firmware-id" data-copy-label="Firmware ID" aria-label="Copy Firmware ID" data-tooltip="Copy Firmware ID"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="11" height="11" rx="2"/><path d="M15 9V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h4"/></svg></button></div></div>
-        <div class="mcu-id-actions"><button id="read-mcu-id" class="button secondary icon-only controller-read-icon icon-tooltip" type="button" aria-label="Read MCU ID and Firmware ID" data-tooltip="Read MCU ID and Firmware ID"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/><path d="M9 2v4M12 2v4M15 2v4M9 18v4M12 18v4M15 18v4M2 9h4M2 12h4M2 15h4M18 9h4M18 12h4M18 15h4"/></svg></span></button><button id="flash-mcu-id" class="button primary" type="submit">Flash MCU ID</button><span id="mcu-id-status" role="status"></span></div>
+        <div class="mcu-id-actions"><button id="read-mcu-id" class="button secondary icon-only controller-read-icon icon-tooltip" type="button" aria-label="Read MCU ID and Firmware ID" data-tooltip="Read MCU ID and Firmware ID"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="6" width="12" height="12" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1" fill="currentColor" stroke="none"/><path d="M9 2v4M12 2v4M15 2v4M9 18v4M12 18v4M15 18v4M2 9h4M2 12h4M2 15h4M18 9h4M18 12h4M18 15h4"/></svg></span></button><button id="flash-mcu-id" class="button primary icon-only mcu-id-flash-icon icon-tooltip" type="submit" aria-label="Flash MCU ID" data-tooltip="Flash MCU ID"><span class="button-icon" aria-hidden="true"><img class="update-image" src="{{ url_for('static', filename='update.png') }}" alt=""></span></button><span id="mcu-id-status" role="status"></span></div>
       </form>
     </section>
 
@@ -71,6 +71,55 @@
       <div class="log-head"><div class="section-heading"><span class="section-number">03</span><div><h2>CAN log</h2></div></div><div class="log-actions"><button id="download-log" class="button text icon-only" type="button" aria-label="Download CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v3h16v-3"/></svg></span></button><button id="clear-log" class="button text icon-only" type="button" aria-label="Clear CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
       <div id="log-output" class="log-output" aria-live="polite"><span class="muted">Waiting for bootloader activity…</span></div>
     </section>
+
+    <div id="mcu-id-configuration-modal" class="mcu-id-configuration-modal" hidden>
+      <div class="mcu-id-configuration-dialog" role="dialog" aria-modal="true" aria-labelledby="mcu-id-configuration-title">
+        <div class="configuration-modal-head"><div class="section-heading"><span class="section-number">⚙</span><div><h2 id="mcu-id-configuration-title">MCU ID defaults</h2></div></div><button id="close-mcu-id-configuration" class="button text icon-only" type="button" aria-label="Close configuration">×</button></div>
+        <form id="mcu-id-configuration-form" class="mcu-id-form">
+          <fieldset class="mcu-id-section">
+            <legend>Part number</legend>
+            <div class="mcu-id-fields">
+              <label>Brand name <input name="brand_name" maxlength="3" minlength="3" required></label>
+              <label>Phases <input name="phases" maxlength="1" minlength="1" required></label>
+              <label>Switches in parallel <select name="switches_in_parallel" required><option value="" disabled selected>Select</option><option value="1">1</option><option value="2">2</option></select></label>
+              <label>Switch type <select name="switch_type" required><option value="M">M (MOSFET)</option></select></label>
+              <label>PCB type <select name="pcb_type" required><option value="" disabled selected>Select</option><option value="1">1 (1P)</option><option value="2">2 (2P)</option></select></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="mcu-id-section">
+            <legend>Model number</legend>
+            <div class="mcu-id-fields">
+              <label>Version code <input name="version_code" maxlength="4" minlength="4" required></label>
+              <label>Sensor <select name="sensor" required><option value="" disabled selected>Select</option><option value="H">H (HALL)</option><option value="I">I (IPS)</option><option value="M">M (MR)</option></select></label>
+              <label>NTC resistor (Ω) <input name="ntc_resistor" type="number" min="1" max="100" step="1" required></label>
+              <label>NTC volt (V) <select name="ntc_volt" required><option value="" disabled selected>Select</option><option value="0">0</option><option value="3">3</option><option value="5">5</option></select></label>
+              <label>NTC value B <select name="ntc_value_b" required><option value="" disabled selected>Select</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option></select></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="mcu-id-section">
+            <legend>Serial number</legend>
+            <div class="mcu-id-fields">
+              <label>EMS <input name="ems" maxlength="2" minlength="2" required></label>
+              <label>Year / month <input name="year_month" maxlength="4" minlength="4" required></label>
+              <label>Batch number <input name="batch_number" maxlength="4" minlength="4" required></label>
+            </div>
+          </fieldset>
+          <div class="configuration-actions"><button class="button text icon-only save-configuration-icon icon-tooltip" type="submit" aria-label="Save configuration" data-tooltip="Save configuration"><span class="button-icon" aria-hidden="true"><img class="save-configuration-image" src="{{ url_for('static', filename='save.png') }}" alt=""></span></button></div>
+        </form>
+      </div>
+    </div>
+
+    <div id="mcu-id-configuration-password-modal" class="password-modal" hidden>
+      <div class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="mcu-id-configuration-password-title">
+        <div class="password-modal-head"><h2 id="mcu-id-configuration-password-title">MCU ID configuration</h2><button id="close-mcu-id-configuration-password" class="button text icon-only" type="button" aria-label="Close password dialog">×</button></div>
+        <form id="mcu-id-configuration-password-form" class="password-form">
+          <label>Password <span class="password-input"><input id="mcu-id-configuration-password" type="password" autocomplete="current-password" required><button class="password-visibility icon-tooltip" type="button" data-password-toggle="mcu-id-configuration-password" aria-label="Show password" data-tooltip="Show password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></span></label>
+          <button class="button primary" type="submit">Continue</button>
+        </form>
+      </div>
+    </div>
   </main>
   <script src="{{ url_for('static', filename='notifications.js') }}?v=20261119-toast"></script>
   <script src="{{ url_for('static', filename='navigation.js') }}?v=20261119-sidebar"></script>

@@ -3,6 +3,10 @@ const fields = [...document.querySelectorAll('#mcu-id-form input')];
 const form = $('mcu-id-form');
 const statusText = $('mcu-id-status');
 const MCU_ID_CONFIGURATION_KEY = 'pic32mkMcuIdConfiguration';
+const configurationForm = $('mcu-id-configuration-form');
+const configurationModal = $('mcu-id-configuration-modal');
+const configurationPasswordModal = $('mcu-id-configuration-password-modal');
+const configurationPasswordForm = $('mcu-id-configuration-password-form');
 let latestLogId = 0;
 let logGeneration = null;
 let connectedPort = '';
@@ -63,15 +67,57 @@ function getMcuIdConfiguration() {
 
 function applyMcuIdConfiguration() {
   const config = getMcuIdConfiguration();
+  const modelTypeDefaults = { phases: '3', switch_type: 'M' };
   const values = {
     brand_name: config.brand_name || 'APT',
-    model_type: ['phases', 'switches_in_parallel', 'switch_type', 'pcb_type'].map((name) => config[name] || '').join(''),
+    model_type: ['phases', 'switches_in_parallel', 'switch_type', 'pcb_type'].map((name) => config[name] || modelTypeDefaults[name] || '').join(''),
+    version_code: config.version_code || 'XXXX',
     application_type: ['sensor', 'ntc_resistor', 'ntc_volt', 'ntc_value_b'].map((name) => config[name] || '').join(''),
-    ems: config.ems || '',
+    ems: config.ems || 'XX',
     year_month: config.year_month || currentYearMonth(),
-    batch_number: config.batch_number || '',
+    batch_number: config.batch_number || 'XXXX',
   };
   Object.entries(values).forEach(([name, value]) => { form.elements[name].value = value; });
+}
+
+function populateConfigurationForm() {
+  const config = getMcuIdConfiguration();
+  [...configurationForm.elements].forEach((field) => {
+    if (field.name) field.value = config[field.name] || '';
+  });
+  if (!configurationForm.elements.brand_name.value) configurationForm.elements.brand_name.value = 'APT';
+  if (!configurationForm.elements.phases.value) configurationForm.elements.phases.value = '3';
+  if (!configurationForm.elements.switch_type.value) configurationForm.elements.switch_type.value = 'M';
+  if (!configurationForm.elements.version_code.value) configurationForm.elements.version_code.value = 'XXXX';
+  if (!configurationForm.elements.ems.value) configurationForm.elements.ems.value = 'XX';
+  if (!configurationForm.elements.year_month.value) configurationForm.elements.year_month.value = currentYearMonth();
+  if (!configurationForm.elements.batch_number.value) configurationForm.elements.batch_number.value = 'XXXX';
+}
+
+function openConfiguration() {
+  populateConfigurationForm();
+  configurationModal.hidden = false;
+  document.body.classList.add('configuration-modal-open');
+  configurationForm.elements.brand_name.focus();
+}
+
+function openConfigurationPassword() {
+  $('mcu-id-configuration-password').value = '';
+  configurationPasswordModal.hidden = false;
+  document.body.classList.add('password-modal-open');
+  $('mcu-id-configuration-password').focus();
+}
+
+function closeConfigurationPassword() {
+  configurationPasswordModal.hidden = true;
+  document.body.classList.remove('password-modal-open');
+  $('open-mcu-id-configuration').focus();
+}
+
+function closeConfiguration() {
+  configurationModal.hidden = true;
+  document.body.classList.remove('configuration-modal-open');
+  $('open-mcu-id-configuration').focus();
 }
 
 function renderConnection(status) {
@@ -188,6 +234,54 @@ $('theme-toggle').addEventListener('click', () => {
   const next = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark';
   localStorage.setItem('pic32mkUploaderTheme', next);
   applyTheme(next);
+});
+$('open-mcu-id-configuration').addEventListener('click', openConfigurationPassword);
+$('close-mcu-id-configuration').addEventListener('click', closeConfiguration);
+configurationModal.addEventListener('click', (event) => {
+  if (event.target === configurationModal) closeConfiguration();
+});
+$('close-mcu-id-configuration-password').addEventListener('click', closeConfigurationPassword);
+configurationPasswordModal.addEventListener('click', (event) => {
+  if (event.target === configurationPasswordModal) closeConfigurationPassword();
+});
+document.querySelectorAll('[data-password-toggle]').forEach((button) => {
+  button.addEventListener('click', () => {
+    const input = $(button.dataset.passwordToggle);
+    const visible = input.type === 'password';
+    input.type = visible ? 'text' : 'password';
+    button.setAttribute('aria-label', visible ? 'Hide password' : 'Show password');
+    button.dataset.tooltip = visible ? 'Hide password' : 'Show password';
+  });
+});
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape' && !configurationModal.hidden) closeConfiguration();
+  if (event.key === 'Escape' && !configurationPasswordModal.hidden) closeConfigurationPassword();
+});
+configurationPasswordForm.addEventListener('submit', async (event) => {
+  event.preventDefault();
+  if (!configurationPasswordForm.reportValidity()) return;
+  try {
+    await api('/api/auth/verify', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: $('mcu-id-configuration-password').value }),
+    });
+    closeConfigurationPassword();
+    openConfiguration();
+  } catch (error) {
+    window.showNotification(error.message || String(error));
+  }
+});
+configurationForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  if (!configurationForm.reportValidity()) return;
+  const configuration = Object.fromEntries(new FormData(configurationForm).entries());
+  Object.keys(configuration).forEach((key) => { configuration[key] = configuration[key].trim().toUpperCase(); });
+  configuration.ntc_resistor = String(Number(configuration.ntc_resistor)).padStart(3, '0');
+  localStorage.setItem(MCU_ID_CONFIGURATION_KEY, JSON.stringify(configuration));
+  applyMcuIdConfiguration();
+  updatePreview();
+  closeConfiguration();
+  window.showNotification('MCU ID configuration saved', 'success');
 });
 fields.forEach((input) => input.addEventListener('input', updatePreview));
 $('clear-mcu-id-form').addEventListener('click', async () => {

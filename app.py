@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hmac
 import threading
 import time
 import zlib
@@ -58,6 +59,7 @@ FIRMWARE_ID_LENGTH = 37
 METADATA_TRANSMITTED_LENGTH = MCU_ID_LENGTH + FIRMWARE_ID_LENGTH - 1
 METADATA_CHUNK_COUNT = (METADATA_TRANSMITTED_LENGTH + METADATA_CHUNK_SIZE - 1) // METADATA_CHUNK_SIZE
 MCU_ID_WRITE_CHUNK_COUNT = (MCU_ID_LENGTH + FRAME_PAYLOAD_SIZE - 1) // FRAME_PAYLOAD_SIZE
+PROTECTED_ACTION_PASSWORD = "aproposdrive"
 MCU_ID_FIELD_LENGTHS = {
     "brand_name": 3,
     "model_type": 4,
@@ -622,11 +624,6 @@ def mcu_id_page():
     return render_template("mcu_id.html")
 
 
-@app.get("/mcu-id/configuration")
-def mcu_id_configuration_page():
-    return render_template("mcu_id_configuration.html")
-
-
 @app.get("/api/ports")
 def ports():
     return jsonify([{"device": port.device, "description": port.description} for port in list_ports.comports()])
@@ -691,8 +688,19 @@ def update():
     return jsonify({"ok": True})
 
 
+@app.post("/api/auth/verify")
+def verify_protected_action_password():
+    password = (request.get_json(silent=True) or {}).get("password", "")
+    if not isinstance(password, str) or not hmac.compare_digest(password, PROTECTED_ACTION_PASSWORD):
+        return jsonify({"error": "Incorrect password"}), 403
+    return jsonify({"ok": True})
+
+
 @app.post("/api/force-update")
 def force_update():
+    password = (request.get_json(silent=True) or {}).get("password", "")
+    if not isinstance(password, str) or not hmac.compare_digest(password, PROTECTED_ACTION_PASSWORD):
+        return jsonify({"error": "Incorrect password"}), 403
     service.start_force_update()
     return jsonify({"ok": True})
 

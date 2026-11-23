@@ -64,6 +64,16 @@
       <div class="log-head"><div class="section-heading"><span class="section-number">04</span><div><h2>CAN log</h2></div></div><div class="log-actions"><button id="download-log" class="button text icon-only" aria-label="Download CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12"/><path d="m8 11 4 4 4-4"/><path d="M4 17v3h16v-3"/></svg></span></button><button id="clear-log" class="button text icon-only" aria-label="Clear CAN log"><span class="button-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="m6 6 1 14h10l1-14"/><path d="M10 10v6"/><path d="M14 10v6"/></svg></span></button></div></div>
       <div id="log-output" class="log-output" aria-live="polite"><span class="muted">Waiting for bootloader activity…</span></div>
     </section>
+
+    <div id="force-update-password-modal" class="password-modal" hidden>
+      <div class="password-dialog" role="dialog" aria-modal="true" aria-labelledby="force-update-password-title">
+        <div class="password-modal-head"><h2 id="force-update-password-title">Force update</h2><button id="close-force-update-password" class="button text icon-only" type="button" aria-label="Close password dialog">×</button></div>
+        <form id="force-update-password-form" class="password-form">
+          <label>Password <span class="password-input"><input id="force-update-password" type="password" autocomplete="current-password" required><button class="password-visibility icon-tooltip" type="button" data-password-toggle="force-update-password" aria-label="Show password" data-tooltip="Show password"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6S2 12 2 12Z"/><circle cx="12" cy="12" r="2.5"/></svg></button></span></label>
+          <button class="button danger" type="submit">Continue</button>
+        </form>
+      </div>
+    </div>
   </main>
   <script src="{{ url_for('static', filename='notifications.js') }}?v=20261119-toast"></script>
   <script src="{{ url_for('static', filename='navigation.js') }}?v=20261119-sidebar"></script>
