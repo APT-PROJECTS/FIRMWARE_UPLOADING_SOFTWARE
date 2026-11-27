@@ -2,7 +2,7 @@ const $ = (id) => document.getElementById(id);
 const fields = [...document.querySelectorAll('#mcu-id-form input')];
 const form = $('mcu-id-form');
 const statusText = $('mcu-id-status');
-const MCU_ID_CONFIGURATION_KEY = 'pic32mkMcuIdConfiguration';
+const MCU_ID_CONFIGURATION_KEY = 'pic32mkMcuIdConfigurationV2';
 const configurationForm = $('mcu-id-configuration-form');
 const configurationModal = $('mcu-id-configuration-modal');
 const configurationPasswordModal = $('mcu-id-configuration-password-modal');
@@ -12,6 +12,11 @@ let logGeneration = null;
 let connectedPort = '';
 let operationBusy = false;
 let mcuIdLocked = false;
+
+function currentYearMonth() {
+  const today = new Date();
+  return `${String(today.getFullYear() % 100).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}`;
+}
 
 function applyTheme(theme) {
   document.documentElement.dataset.theme = theme;
@@ -51,11 +56,6 @@ function updatePreview() {
   $('mcu-id-preview').textContent = value || '—';
 }
 
-function currentYearMonth() {
-  const today = new Date();
-  return `${String(today.getFullYear() % 100).padStart(2, '0')}${String(today.getMonth() + 1).padStart(2, '0')}`;
-}
-
 function getMcuIdConfiguration() {
   try {
     const value = JSON.parse(localStorage.getItem(MCU_ID_CONFIGURATION_KEY) || '{}');
@@ -67,17 +67,8 @@ function getMcuIdConfiguration() {
 
 function applyMcuIdConfiguration() {
   const config = getMcuIdConfiguration();
-  const modelTypeDefaults = { phases: '3', switch_type: 'M' };
-  const values = {
-    brand_name: config.brand_name || 'APT',
-    model_type: ['phases', 'switches_in_parallel', 'switch_type', 'pcb_type'].map((name) => config[name] || modelTypeDefaults[name] || '').join(''),
-    version_code: config.version_code || 'XXXX',
-    application_type: ['sensor', 'ntc_resistor', 'ntc_volt', 'ntc_value_b'].map((name) => config[name] || '').join(''),
-    ems: config.ems || 'XX',
-    year_month: config.year_month || currentYearMonth(),
-    batch_number: config.batch_number || 'XXXX',
-  };
-  Object.entries(values).forEach(([name, value]) => { form.elements[name].value = value; });
+  ['brand_name', 'model_type', 'version_code', 'application_type', 'ems', 'year_month', 'batch_number']
+    .forEach((name) => { form.elements[name].value = name === 'year_month' ? (config[name] || currentYearMonth()) : (config[name] || ''); });
 }
 
 function populateConfigurationForm() {
@@ -85,13 +76,7 @@ function populateConfigurationForm() {
   [...configurationForm.elements].forEach((field) => {
     if (field.name) field.value = config[field.name] || '';
   });
-  if (!configurationForm.elements.brand_name.value) configurationForm.elements.brand_name.value = 'APT';
-  if (!configurationForm.elements.phases.value) configurationForm.elements.phases.value = '3';
-  if (!configurationForm.elements.switch_type.value) configurationForm.elements.switch_type.value = 'M';
-  if (!configurationForm.elements.version_code.value) configurationForm.elements.version_code.value = 'XXXX';
-  if (!configurationForm.elements.ems.value) configurationForm.elements.ems.value = 'XX';
   if (!configurationForm.elements.year_month.value) configurationForm.elements.year_month.value = currentYearMonth();
-  if (!configurationForm.elements.batch_number.value) configurationForm.elements.batch_number.value = 'XXXX';
 }
 
 function openConfiguration() {
@@ -276,7 +261,6 @@ configurationForm.addEventListener('submit', (event) => {
   if (!configurationForm.reportValidity()) return;
   const configuration = Object.fromEntries(new FormData(configurationForm).entries());
   Object.keys(configuration).forEach((key) => { configuration[key] = configuration[key].trim().toUpperCase(); });
-  configuration.ntc_resistor = String(Number(configuration.ntc_resistor)).padStart(3, '0');
   localStorage.setItem(MCU_ID_CONFIGURATION_KEY, JSON.stringify(configuration));
   applyMcuIdConfiguration();
   updatePreview();

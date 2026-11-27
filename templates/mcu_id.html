@@ -74,16 +74,13 @@
 
     <div id="mcu-id-configuration-modal" class="mcu-id-configuration-modal" hidden>
       <div class="mcu-id-configuration-dialog" role="dialog" aria-modal="true" aria-labelledby="mcu-id-configuration-title">
-        <div class="configuration-modal-head"><div class="section-heading"><span class="section-number">⚙</span><div><h2 id="mcu-id-configuration-title">MCU ID defaults</h2></div></div><button id="close-mcu-id-configuration" class="button text icon-only" type="button" aria-label="Close configuration">×</button></div>
+        <div class="configuration-modal-head"><div class="section-heading"><span class="section-number">⚙</span><div><h2 id="mcu-id-configuration-title">MCU ID configuration</h2></div></div><button id="close-mcu-id-configuration" class="button text icon-only" type="button" aria-label="Close configuration">×</button></div>
         <form id="mcu-id-configuration-form" class="mcu-id-form">
           <fieldset class="mcu-id-section">
             <legend>Part number</legend>
             <div class="mcu-id-fields">
               <label>Brand name <input name="brand_name" maxlength="3" minlength="3" required></label>
-              <label>Phases <input name="phases" maxlength="1" minlength="1" required></label>
-              <label>Switches in parallel <select name="switches_in_parallel" required><option value="" disabled selected>Select</option><option value="1">1</option><option value="2">2</option></select></label>
-              <label>Switch type <select name="switch_type" required><option value="M">M (MOSFET)</option></select></label>
-              <label>PCB type <select name="pcb_type" required><option value="" disabled selected>Select</option><option value="1">1 (1P)</option><option value="2">2 (2P)</option></select></label>
+              <label>Model type <input name="model_type" maxlength="4" minlength="4" required></label>
             </div>
           </fieldset>
 
@@ -91,10 +88,7 @@
             <legend>Model number</legend>
             <div class="mcu-id-fields">
               <label>Version code <input name="version_code" maxlength="4" minlength="4" required></label>
-              <label>Sensor <select name="sensor" required><option value="" disabled selected>Select</option><option value="H">H (HALL)</option><option value="I">I (IPS)</option><option value="M">M (MR)</option></select></label>
-              <label>NTC resistor (Ω) <input name="ntc_resistor" type="number" min="1" max="100" step="1" required></label>
-              <label>NTC volt (V) <select name="ntc_volt" required><option value="" disabled selected>Select</option><option value="0">0</option><option value="3">3</option><option value="5">5</option></select></label>
-              <label>NTC value B <select name="ntc_value_b" required><option value="" disabled selected>Select</option><option value="35">35</option><option value="36">36</option><option value="37">37</option><option value="38">38</option><option value="39">39</option><option value="40">40</option></select></label>
+              <label>Application type <input name="application_type" maxlength="7" minlength="7" required></label>
             </div>
           </fieldset>
 
